@@ -697,15 +697,29 @@ public class OpCodes {
         }
         OP_CODES = Collections.unmodifiableMap(m);
     }
-    
-    
+
+
+    /**
+     * Get the name of the type associated with the type code.
+     * 
+     * @param type
+     *            the type code
+     * @return the name of the type
+     */
     public static String getArrayType(int type) {
         return ARRAY_TYPES[type];
     }
-    
-    
+
+
+    /**
+     * Get the code of the type associated with the type name
+     * 
+     * @param type
+     *            the type name
+     * @return the code of the type
+     */
     public static int getArrayType(String type) {
-        for(int i=0;i<ARRAY_TYPES.length;i++) {
+        for(int i = 0;i < ARRAY_TYPES.length;i++) {
             if( type.equalsIgnoreCase(ARRAY_TYPES[i]) ) return i;
         }
         return -1;
