@@ -1,20 +1,36 @@
 package yabel.io;
 
 import java.io.IOException;
-import java.util.List;
 
+/**
+ * An object that can write out a ClassData object
+ * 
+ * @author Simon Greatrix
+ * 
+ */
 public interface ClassDataWriter {
-
-    void startClassData(String name) throws IOException;
-
-    void endClassData() throws IOException;
-
-    <T> void writeList(String k, Class<T> clss, List<T> list) throws IOException;
-
-    void write(String k, Object v) throws IOException;
-
-    void start() throws IOException;
-
+    /**
+     * Finish writing.
+     * 
+     * @throws IOException
+     */
     void finish() throws IOException;
 
+
+    /**
+     * Start writing.
+     * 
+     * @throws IOException
+     */
+    void start() throws IOException;
+
+
+    /**
+     * Write a simple object.
+     * 
+     * @param v
+     *            the object
+     * @throws IOException
+     */
+    void write(Object v) throws IOException;
 }

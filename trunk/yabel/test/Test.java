@@ -1,12 +1,21 @@
 package yabel.test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.Charset;
+import java.util.List;
+
+import org.xml.sax.SAXException;
+
 import yabel.ClassBuilder;
 import yabel.ClassData;
 import yabel.Method;
 import yabel.code.Code;
-
-import java.io.*;
-import java.util.List;
+import yabel.io.XMLDataReader;
 
 public class Test {
     
@@ -16,6 +25,27 @@ public class Test {
         Code code = m.getCode();
         ClassData dna = code.decompile();
         if(ClassBuilder.DEBUG) System.out.println(dna);
+        
+        String sdna = dna.toString();
+        ByteArrayInputStream in = new ByteArrayInputStream(sdna.getBytes(Charset.forName("UTF-8")));
+        ClassData cd2 = null;
+        try {
+            cd2 = XMLDataReader.read(in);
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (SAXException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        }
+        String sd2 = String.valueOf(cd2);
+        if(! sd2.equals(sdna) ) {
+            System.out.println(sdna);
+            System.out.println(sd2);
+            throw new Error();
+        }
+        
+        
 //        System.out.println("max locals = " + code.getMaxLocals());
 //        System.out.println("max stack = " + code.getMaxStack());
 
