@@ -1,8 +1,5 @@
 package yabel;
 
-import yabel.io.ClassDataWriter;
-
-import java.io.IOException;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -16,6 +13,54 @@ import java.util.Map.Entry;
  * 
  */
 public class SwitchData implements Iterable<Entry<Integer, String>> {
+    /**
+     * Representation of a case value and label
+     * 
+     * @author Simon Greatrix
+     */
+    public static class Case {
+        /** The value this case will match */
+        private final Integer val_;
+
+        /** The label this case will jump to */
+        private final String label_;
+
+
+        /**
+         * Create new case
+         * 
+         * @param val
+         *            value to match
+         * @param label
+         *            label to jump to
+         */
+        public Case(Integer val, String label) {
+            val_ = val;
+            label_ = label;
+        }
+
+
+        public Integer getValue() {
+            return val_;
+        }
+
+
+        public String getLabel() {
+            return label_;
+        }
+    }
+
+
+    /**
+     * Add a case to this switch statement
+     * 
+     * @param cse
+     *            the case to add
+     */
+    public void add(Case cse) {
+        add(cse.getValue(), cse.getLabel());
+    }
+
     /** The destinations for each case */
     private final LinkedHashMap<Integer, String> data_ = new LinkedHashMap<Integer, String>();
 
@@ -119,9 +164,5 @@ public class SwitchData implements Iterable<Entry<Integer, String>> {
      */
     public int size() {
         return data_.size();
-    }
-    
-    public void writeTo(String key, ClassDataWriter cdw) throws IOException {
-        
     }
 }

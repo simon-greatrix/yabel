@@ -66,27 +66,40 @@ public class Code extends Attribute {
             if( p != -1 ) {
                 buf.append('\\');
                 buf.append(ESCAPE_VALS.charAt(p));
-            } else if( (ch < 0x20)
-                    || ((ch > 0x7E) && (ch < 0xFF))
-                    || ((ch == ' ') || (ch == '{') || (ch == '}') || (ch == ':')) ) {
-                // handle special chars and normal octal escapes
-                buf.append('\\');
-                if( ch >= 0100 )
-                    buf.append(Character.forDigit((ch >> 6) & 0x7, 8));
-                if( ch >= 0010 )
-                    buf.append(Character.forDigit((ch >> 3) & 0x7, 8));
-                buf.append("01234567".charAt((ch) & 0x7));
-            } else if( ch >= 0xFF ) {
-                // handle 16-bit escapes
-                buf.append("\\u");
-                buf.append(Character.forDigit((ch >> 12) & 0xf, 16));
-                buf.append(Character.forDigit((ch >> 8) & 0xf, 16));
-                buf.append(Character.forDigit((ch >> 4) & 0xf, 16));
-                buf.append(Character.forDigit(ch & 0xf, 16));
-            } else {
-                // normal char
-                buf.append(ch);
+                continue;
             }
+
+            // handle regular characters
+            if( (ch > 0x20) && (ch < 0x7f) && (ch != ' ') && (ch != '{')
+                    && (ch != '}') && (ch != ':') ) {
+                buf.append(ch);
+                continue;
+            }
+
+            // handle octal escapes
+            if( ch < 0xff ) {
+                // ensure the character following the octal escape is not an
+                // octal digit
+                int i1 = i + 1;
+                char ch2 = (i1 < val.length()) ? val.charAt(i1) : 'x';
+                if( (ch2<'0') || ('7'<ch2) ) {
+                    // handle special chars and normal octal escapes
+                    buf.append('\\');
+                    if( ch >= 0100 )
+                        buf.append(Character.forDigit((ch >> 6) & 0x7, 8));
+                    if( ch >= 0010 )
+                        buf.append(Character.forDigit((ch >> 3) & 0x7, 8));
+                    buf.append("01234567".charAt((ch) & 0x7));
+                    continue;
+                }
+            }
+
+            // handle 16-bit escapes
+            buf.append("\\u");
+            buf.append(Character.forDigit((ch >> 12) & 0xf, 16));
+            buf.append(Character.forDigit((ch >> 8) & 0xf, 16));
+            buf.append(Character.forDigit((ch >> 4) & 0xf, 16));
+            buf.append(Character.forDigit(ch & 0xf, 16));
         }
     }
 
@@ -567,8 +580,8 @@ public class Code extends Attribute {
      * ISTORE:12<br>
      * LSTORE:property<br>
      * LSTORE:12</td>
-     * <td>Generates an appropriate store or wide store instruction. The ClassData
-     * should contain an Integer for "property".</td>
+     * <td>Generates an appropriate store or wide store instruction. The
+     * ClassData should contain an Integer for "property".</td>
      * </tr>
      * <tr>
      * <td>IINC:property<br>
@@ -596,18 +609,18 @@ public class Code extends Attribute {
      * invokeStatic:property<br>
      * invokeStatic:123</td>
      * <td>Generates an U2 reference, INVOKESPECIAL, INVOKEVIRTUAL or
-     * INVOKESTATIC instruction. The ClassData's "property" should contain either
-     * a two element StringArray specifying name and type of a method in this
-     * class, or a three element String Array specifying class, name and type of
-     * the method, or an Integer giving the index of the method definition in
-     * the constant pool. If an explicit value is given, it is the constant pool
-     * index.</td>
+     * INVOKESTATIC instruction. The ClassData's "property" should contain
+     * either a two element StringArray specifying name and type of a method in
+     * this class, or a three element String Array specifying class, name and
+     * type of the method, or an Integer giving the index of the method
+     * definition in the constant pool. If an explicit value is given, it is the
+     * constant pool index.</td>
      * </tr>
      * <tr>
      * <td>U1:property<br>
      * U1:123</td>
-     * <td>Outputs a single byte, either the specified integer in the ClassData or
-     * the explicit value</td>
+     * <td>Outputs a single byte, either the specified integer in the ClassData
+     * or the explicit value</td>
      * </tr>
      * <tr>
      * <td>U2:property<br>

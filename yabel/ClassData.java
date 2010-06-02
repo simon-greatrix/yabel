@@ -1,14 +1,13 @@
 package yabel;
 
-import yabel.io.ClassDataWriter;
-import yabel.io.XMLDataWriter;
-
 import java.io.IOException;
 import java.io.StringWriter;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.TreeMap;
-import java.util.Map.Entry;
+
+import yabel.io.ClassDataWriter;
+import yabel.io.XMLDataWriter;
 
 /**
  * Typed data to configure a class compilation.
@@ -17,9 +16,43 @@ import java.util.Map.Entry;
  * 
  */
 public class ClassData extends LinkedHashMap<String, Object> {
-    /** serial version UID */
-    private static final long serialVersionUID = 7439179816314472328L;
+    /**
+     * Representation of a key and value pair
+     * 
+     * @author Simon Greatrix
+     * 
+     */
+    public static class NamedValue {
+        /** Key for this named value */
+        final String key_;
 
+        /** Value for this named value */
+        final Object value_;
+
+
+        /**
+         * Representation of a key and a value
+         * 
+         * @param key
+         *            the key name
+         * @param value
+         *            the value
+         */
+        public NamedValue(String key, Object value) {
+            key_ = key;
+            value_ = value;
+        }
+
+
+        public String getKey() {
+            return key_;
+        }
+
+
+        public Object getValue() {
+            return value_;
+        }
+    }
 
     /**
      * Holder for a list that knows the type of the list contents
@@ -29,7 +62,7 @@ public class ClassData extends LinkedHashMap<String, Object> {
      * @param <T>
      *            the type of the list contents
      */
-    private static class ListHolder<T> {
+    public static class TypedList<T> {
         /** Class for the list contents */
         final Class<T> clss_;
 
@@ -45,9 +78,14 @@ public class ClassData extends LinkedHashMap<String, Object> {
          * @param clss
          *            the class of the list contents
          */
-        ListHolder(List<T> list, Class<T> clss) {
+        public TypedList(List<T> list, Class<T> clss) {
             list_ = list;
             clss_ = clss;
+        }
+        
+        
+        public Class<T> getType() {
+            return clss_;
         }
 
 
@@ -60,7 +98,7 @@ public class ClassData extends LinkedHashMap<String, Object> {
          *            the class for the required type
          * @return the list if it is of the correct type
          */
-        <Q> List<Q> get(Class<Q> clss) {
+        public <Q> List<Q> get(Class<Q> clss) {
             if( clss.isAssignableFrom(clss_) ) {
                 @SuppressWarnings("unchecked")
                 List<Q> list = (List<Q>) list_;
@@ -68,25 +106,10 @@ public class ClassData extends LinkedHashMap<String, Object> {
             }
             return null;
         }
-        
-        
-        void writeTo(String key, ClassDataWriter cdw) throws IOException {
-            cdw.writeList(key, clss_, list_);
-        }
     }
-    
-    
 
-    /**
-     * {@inheritDoc}
-     */
-    @Override
-    public Object put(String key, Object value) {
-        if( (value!=null) && (value instanceof List<?>) ) {
-            throw new Error("Lists must be put into the map using put List");
-        }
-        return super.put(key, value);
-    }
+    /** serial version UID */
+    private static final long serialVersionUID = 7439179816314472328L;
 
 
     /**
@@ -140,8 +163,38 @@ public class ClassData extends LinkedHashMap<String, Object> {
     public <T> List<T> getList(Class<T> clss, String key) {
         Object o = get(key);
         if( o == null ) return null;
-        if( !(o instanceof ListHolder<?>) ) return null;
-        return ((ListHolder<?>) o).get(clss);
+        if( !(o instanceof TypedList<?>) ) return null;
+        return ((TypedList<?>) o).get(clss);
+    }
+
+
+    /**
+     * Put a named value into this.
+     * 
+     * @param nv
+     *            the named value to put
+     * @return the value previously stored against the key
+     */
+    public Object put(NamedValue nv) {
+        return putInternal(nv.getKey(), nv.getValue());
+    }
+    
+    
+    private Object putInternal(String key, Object value) {
+        if( key==null || key.equals("") ) throw new IllegalArgumentException("Key must be specified and not empty");
+        return super.put(key,value);
+    }
+
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public Object put(String key, Object value) {
+        if( (value != null) && (value instanceof List<?>) ) {
+            throw new Error("Lists must be put into the map using put List");
+        }
+        return putInternal(key, value);
     }
 
 
@@ -156,10 +209,11 @@ public class ClassData extends LinkedHashMap<String, Object> {
      *            the key to store the list under
      * @param list
      *            the list to store
+     * @return the value previously stored against the key
      */
-    public <T> void putList(Class<T> clss, String key, List<T> list) {
-        ListHolder<T> lh = new ListHolder<T>(list, clss);
-        super.put(key, lh);
+    public <T> Object putList(Class<T> clss, String key, List<T> list) {
+        TypedList<T> lh = new TypedList<T>(list, clss);
+        return putInternal(key, lh);
     }
 
 
@@ -171,33 +225,13 @@ public class ClassData extends LinkedHashMap<String, Object> {
         clear();
         putAll(temp);
     }
-    
-    
-    public void writeTo(ClassDataWriter cdw) throws IOException {
-        cdw.start();
-        writeTo(null,cdw);
-        cdw.finish();
-    }
-    
-    
-    private void writeTo(String name, ClassDataWriter cdw) throws IOException {
-        cdw.startClassData(name);
-        for(Entry<String,Object> e : entrySet()) {
-            String k = e.getKey();
-            Object v = e.getValue();
-            if( v instanceof ClassData ) {
-                ((ClassData) v).writeTo(k,cdw);
-            } else if( v instanceof ListHolder<?> ) {
-                ((ListHolder<?>) v).writeTo(k, cdw);
-            } else {
-                cdw.write(k,v);
-            }
-        }
-        cdw.endClassData();
-    }
-    
 
-    /** Returns this ClassData contents in XML format */
+
+    /**
+     * Returns this ClassData contents in XML format.
+     * 
+     * @return this as a String
+     */
     @Override
     public String toString() {
         StringWriter writer = new StringWriter();
@@ -205,10 +239,24 @@ public class ClassData extends LinkedHashMap<String, Object> {
         try {
             writeTo(xml);
             writer.close();
-        } catch ( IOException ioe ) {
-            throw new Error("Unexpected IOE",ioe);
-//            return "<unavailable>";
+        } catch (IOException ioe) {
+            throw new Error("Unexpected IOE", ioe);
+            // return "<unavailable>";
         }
         return writer.toString();
+    }
+
+
+    /**
+     * Write this to the given writer
+     * 
+     * @param cdw
+     *            the writer to write to
+     * @throws IOException
+     */
+    public void writeTo(ClassDataWriter cdw) throws IOException {
+        cdw.start();
+        cdw.write(this);
+        cdw.finish();
     }
 }

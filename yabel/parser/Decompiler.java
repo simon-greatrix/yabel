@@ -5,6 +5,7 @@ import yabel.Handler;
 import yabel.OpCodes;
 import yabel.SwitchData;
 import yabel.constants.*;
+import yabel.io.IO;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -179,11 +180,11 @@ public class Decompiler implements ParserListener {
     private void decompile3(int position, byte[] buffer, int length,
             Decompiler.OpCode opc) {
         int op = 0xff & buffer[0];
-        int v = Parser.readU2(buffer, 1);
+        int v = IO.readU2(buffer, 1);
         switch (buffer[0]) {
         // handle special cases
         case OpCodes.IINC:
-            buf_.append("IINC:").append(Parser.readU1(buffer, 1)).append(
+            buf_.append("IINC:").append(IO.readU1(buffer, 1)).append(
                     ':').append(buffer[2]);
             opc.opCode_ = buf_.toString();
             return;
@@ -241,7 +242,7 @@ public class Decompiler implements ParserListener {
 
             // handle branch instructions
         default: {
-            int addr = position + Parser.readS2(buffer, 1);
+            int addr = position + IO.readS2(buffer, 1);
             Integer iaddr = Integer.valueOf(addr);
             String lNm = String.format("lbl%04x", iaddr);
             labels_.add(iaddr);
@@ -258,16 +259,16 @@ public class Decompiler implements ParserListener {
         // must be MULTINEWARRAY or WIDE
         switch (buffer[0]) {
         case OpCodes.MULTIANEWARRAY: {
-            int v = Parser.readU2(buffer, 1);
+            int v = IO.readU2(buffer, 1);
             buf_.append("MULTIANEWARRAY CLASS:").append(classToData(v)).append(
-                    " U1:").append(Parser.readU1(buffer, 3));
+                    " U1:").append(IO.readU1(buffer, 3));
             opc.opCode_ = buf_.toString();
             return;
         }
 
         case OpCodes.WIDE: {
-            int op = Parser.readU1(buffer, 1);
-            int v = Parser.readU2(buffer, 2);
+            int op = IO.readU1(buffer, 1);
+            int v = IO.readU2(buffer, 2);
             buf_.append(OpCodes.getOpName(op)).append(':').append(v);
             opc.opCode_ = buf_.toString();
             return;
@@ -286,7 +287,7 @@ public class Decompiler implements ParserListener {
         case OpCodes.JSR_W:
             // falls through
         case OpCodes.GOTO_W: {
-            int v = Parser.readS4(buffer, 1);
+            int v = IO.readS4(buffer, 1);
             int addr = position + v;
             Integer iaddr = Integer.valueOf(addr);
             String lNm = String.format("lbl%04x", iaddr);
@@ -297,7 +298,7 @@ public class Decompiler implements ParserListener {
             return;
         }
         case OpCodes.INVOKEINTERFACE: {
-            int v = Parser.readU2(buffer, 1);
+            int v = IO.readU2(buffer, 1);
             String iNm = refToData("iface", v);
             buf_.append("INVOKEINTERFACE:").append(iNm);
             opc.opCode_ = buf_.toString();
@@ -313,8 +314,8 @@ public class Decompiler implements ParserListener {
     private void decompile6(int position, byte[] buffer, int length,
             Decompiler.OpCode opc) {
         if( (buffer[0] == OpCodes.WIDE) && (buffer[1] == OpCodes.IINC) ) {
-            int v1 = Parser.readU2(buffer, 2);
-            int v2 = Parser.readS2(buffer, 4);
+            int v1 = IO.readU2(buffer, 2);
+            int v2 = IO.readS2(buffer, 4);
             buf_.append("IINC:").append(v1).append(':').append(v2);
             opc.opCode_ = buf_.toString();
             return;
@@ -335,19 +336,19 @@ public class Decompiler implements ParserListener {
         // match - offset
         // match - offset ...
         int p = 4 - (position % 4);
-        int dflt = position + Parser.readS4(buffer, p);
+        int dflt = position + IO.readS4(buffer, p);
         Integer idflt = Integer.valueOf(dflt);
         String l = String.format("lbl%04x", idflt);
         labels_.add(idflt);
         SwitchData sw = new SwitchData(l);
 
         p += 4;
-        int pairs = Parser.readS4(buffer, p);
+        int pairs = IO.readS4(buffer, p);
         while( pairs > 0 ) {
             p += 4;
-            int match = Parser.readS4(buffer, p);
+            int match = IO.readS4(buffer, p);
             p += 4;
-            int offset = position + Parser.readS4(buffer, p);
+            int offset = position + IO.readS4(buffer, p);
 
             // get label and mapping
             Integer ioffset = Integer.valueOf(offset);
@@ -375,18 +376,18 @@ public class Decompiler implements ParserListener {
         // high
         // offsets...
         int p = 4 - (position % 4);
-        int dflt = position + Parser.readS4(buffer, p);
+        int dflt = position + IO.readS4(buffer, p);
         Integer idflt = Integer.valueOf(dflt);
         String l = String.format("lbl%04x", idflt);
         labels_.add(idflt);
         SwitchData sw = new SwitchData(l);
 
-        int low = Parser.readS4(buffer, p + 4);
-        int high = Parser.readS4(buffer, p + 8);
+        int low = IO.readS4(buffer, p + 4);
+        int high = IO.readS4(buffer, p + 8);
         p = p + 8;
         for(int i = low;i <= high;i++) {
             p += 4;
-            int offset = position + Parser.readS4(buffer, p);
+            int offset = position + IO.readS4(buffer, p);
 
             // we forcibly retain pointless table entries for low and
             // high in order to ensure the recompiled code is identical

@@ -1,12 +1,14 @@
 package yabel.parser;
 
-import yabel.ClassBuilder;
-import yabel.OpCodes;
-
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
+import yabel.OpCodes;
 
 /**
  * Parse bytes into op-codes.
@@ -15,39 +17,59 @@ import java.util.Set;
  * 
  */
 public class Parser {
-    /** Copy of current op-code */
-    private byte[] buffer_ = new byte[16];
+    /**
+     * The Parse states
+     * 
+     * @author Simon Greatrix
+     * 
+     */
+    private enum State {
+        /** Reading the extra bytes for an op-code */
+        EXTRA_BYTES,
 
-    /** Number of bytes in buffer */
-    private int bufPos_ = 0;
+        /** Reading a LOOKUPSWITCH statement */
+        LOOKUP,
 
-    /** Bytes left in current state */
-    private int bytesLeft_ = 0;
+        /** Start of a new op-code */
+        START,
 
-    /** Number of bytes in this code block */
-    private int count_ = 0;
+        /** Reading a TABLESWITCH statement */
+        TABLE,
 
-    /** Position of the last op code */
-    private int lastOpPosition_ = 0;
+        /** Reading the op-code for a WIDE instruction */
+        WIDE;
+    }
 
-    /** Listener for op-codes */
-    private ParserListener listener_;
+    /**
+     * Switch statement parsing
+     * 
+     * @author Simon Greatrix
+     */
+    private enum SwitchState {
+        /** Reading cases */
+        CASES,
 
-    /** Current parsing state */
-    private int state_ = 0;
+        /** Reading default offset */
+        DEFAULT,
 
-    /** Value used in reading switch statements */
-    private int switch1_ = 0;
+        /** Reading maxima for table switch */
+        MAX,
 
-    /** Value used in reading switch statements */
-    private int switch2_ = 0;
+        /** Reading minima for table switch */
+        MIN,
 
-    /** Value used in reading switch statements */
-    private int switch3_ = 0;
+        /** Reading number of offsets in lookup switch */
+        NPAIRS,
+
+        /** Reading initial padding bytes */
+        PAD
+    }
 
     /** Op-codes that branch */
     static final Set<Byte> BRANCH_OPS;
 
+    /** File path to write debug messages to */
+    private static String DEBUG_FILE = null;
 
     /**
      * Number of bytes after the op-code itself.
@@ -105,7 +127,7 @@ public class Parser {
 
     /** All the byte codes that can exit a decompiler block */
     static final Set<Byte> OP_EXIT;
-    
+
     static {
 
         // initialise branch instructions
@@ -134,7 +156,6 @@ public class Parser {
         branches.add(Byte.valueOf(OpCodes.TABLESWITCH));
         BRANCH_OPS = Collections.unmodifiableSet(branches);
 
-
         Set<Byte> opVars = new HashSet<Byte>();
         opVars.add(Byte.valueOf(OpCodes.ATHROW));
         opVars.add(Byte.valueOf(OpCodes.RETURN));
@@ -145,7 +166,63 @@ public class Parser {
         opVars.add(Byte.valueOf(OpCodes.LRETURN));
         opVars.add(Byte.valueOf(OpCodes.RET));
         OP_EXIT = Collections.unmodifiableSet(opVars);
+
+        String propName = Parser.class.getName() + ".debugFile";
+        String debug = System.getProperty(propName);
+        if( (debug == null) || (debug.equals("")) ) {
+            debug = System.getenv(propName.toUpperCase());
+        }
+        if( (debug != null) && !debug.equals("") ) {
+            File f = new File(debug);
+            File p = f.getParentFile();
+            if( (!p.exists()) && (!p.mkdirs()) ) {
+                System.err.println("Cannot create debug folder "
+                        + p.getAbsolutePath());
+            } else {
+                DEBUG_FILE = debug;
+            }
+        }
     }
+
+    /** Copy of current op-code */
+    private byte[] buffer_ = new byte[16];
+
+    /** Number of bytes in buffer */
+    private int bufPos_ = 0;
+
+    /** Bytes left in current state */
+    private int bytesLeft_ = 0;
+
+    /** Number of bytes in this code block */
+    private int count_ = 0;
+
+    /** Writer for debug messages */
+    private PrintWriter debug_ = null;
+
+    /** Are we generating debug output? */
+    private boolean isDebug_ = false;
+
+    /** Position of the last op code */
+    private int lastOpPosition_ = 0;
+
+    /** Listener for op-codes */
+    private ParserListener listener_;
+
+    /** Current parsing state */
+    private State state_ = State.START;
+
+    /** Value used in reading switch statements */
+    private int switch1_ = 0;
+
+    /** Value used in reading switch statements */
+    private int switch2_ = 0;
+
+    /** Value used in reading switch statements */
+    private int switch3_ = 0;
+
+    /** Current parsing state of switch parsing */
+    private SwitchState switchState_ = null;
+
 
     /**
      * Create a new Parser for parsing byte-code into op-codes.
@@ -155,6 +232,35 @@ public class Parser {
      */
     public Parser(ParserListener listener) {
         listener_ = listener;
+
+        if( DEBUG_FILE != null ) {
+            for(int i = 0;i < 0x10000;i++) {
+                File f = new File(String.format("%s.%04x.log", DEBUG_FILE,
+                        Integer.valueOf(i)));
+                try {
+                    if( f.createNewFile() ) {
+                        debug_ = new PrintWriter(new FileWriter(f), true);
+                        isDebug_ = true;
+                        break;
+                    }
+                } catch (IOException e) {
+                    System.err.println("Unable to create debug output to file "
+                            + f);
+                    e.printStackTrace(System.err);
+                }
+            }
+        }
+    }
+
+
+    /** Flush and close the debug writer on finalize */
+    @Override
+    protected void finalize() throws Throwable {
+        if( isDebug_ ) {
+            debug_.flush();
+            debug_.close();
+        }
+        super.finalize();
     }
 
 
@@ -177,7 +283,7 @@ public class Parser {
     public void parse(int b) {
         b = b & 0xff;
 
-        if( state_ == 0 ) {
+        if( state_ == State.START ) {
             bufPos_ = 0;
         }
         if( bufPos_ == buffer_.length ) {
@@ -189,203 +295,87 @@ public class Parser {
         bufPos_++;
 
         switch (state_) {
-        case 0:
+        case START:
             // just about to read an op-code
             lastOpPosition_ = count_;
             bytesLeft_ = NUM_BYTES[b];
-            if( ClassBuilder.DEBUG ) {
+            if( isDebug_ ) {
                 String s = OpCodes.getOpName(b);
-                System.out.print(String.format("%6d : ",
-                        Integer.valueOf(count_)));
-                System.out.print(s);
-                System.out.print((bytesLeft_ == 0) ? "\n" : " ");
+                debug_.printf("%6d : %s", Integer.valueOf(count_), s);
+                if( bytesLeft_ == 0 ) {
+                    debug_.println();
+                } else {
+                    debug_.print(" ");
+                }
             }
-            if( bytesLeft_ > 0 ) state_ = 1;
+            if( bytesLeft_ > 0 ) state_ = State.EXTRA_BYTES;
             if( bytesLeft_ < 0 ) {
                 switch ((byte) b) {
                 case OpCodes.WIDE:
-                    state_ = 100;
+                    state_ = State.WIDE;
                     break;
                 case OpCodes.LOOKUPSWITCH:
                     bytesLeft_ = 4;
                     switch1_ = 0;
                     switch2_ = 0;
                     switch3_ = 0;
-                    state_ = ((count_ % 4) == 3) ? 201 : 200;
+                    state_ = State.LOOKUP;
+                    switchState_ = ((count_ % 4) == 3) ? SwitchState.DEFAULT
+                            : SwitchState.PAD;
                     break;
                 case OpCodes.TABLESWITCH:
                     bytesLeft_ = 4;
                     switch1_ = 0;
                     switch2_ = 0;
                     switch3_ = 0;
-                    state_ = ((count_ % 4) == 3) ? 301 : 300;
+                    state_ = State.TABLE;
+                    switchState_ = ((count_ % 4) == 3) ? SwitchState.DEFAULT
+                            : SwitchState.PAD;
                     break;
                 default:
-                    throw new IllegalArgumentException("Op-code " + b
-                            + " (" + Integer.toHexString(b)
-                            + ") was not recognised");
+                    throw new IllegalArgumentException("Op-code " + b + " ("
+                            + Integer.toHexString(b) + ") was not recognised");
                 }
             }
             break;
-        case 1:
+        case EXTRA_BYTES:
             // reading additional bytes for op-code
             bytesLeft_--;
-            if( bytesLeft_ == 0 ) state_ = 0;
-            if( ClassBuilder.DEBUG ) {
-                System.out.print(String.format("%02x", Integer.valueOf(b)));
-                System.out.print((bytesLeft_ == 0) ? "\n" : " ");
+            if( bytesLeft_ == 0 ) state_ = State.START;
+            if( isDebug_ ) {
+                debug_.printf("%02x", Integer.valueOf(b));
+                if( bytesLeft_ == 0 ) {
+                    debug_.println();
+                } else {
+                    debug_.print(" ");
+                }
             }
             break;
-        case 100:
+        case WIDE:
             // read a WIDE op-code
             bytesLeft_ = 2 * Parser.NUM_BYTES[b];
             if( bytesLeft_ <= 0 )
                 throw new IllegalArgumentException("Op-code " + b + " ("
                         + Integer.toHexString(b) + " cannot follow WIDE");
-            if( ClassBuilder.DEBUG ) {
+            if( isDebug_ ) {
                 String s = OpCodes.getOpName(b);
-                System.out.print(s);
-                System.out.print(" ");
+                debug_.print(s);
+                debug_.print(" ");
+                debug_.flush();
             }
-            state_ = 1;
+            state_ = State.EXTRA_BYTES;
             break;
-        case 200:
-            // read a LOOKUPSWITCH instruction's padding bytes
-            if( (count_ % 4) == 3 ) {
-                state_ = 201;
-                if( ClassBuilder.DEBUG ) System.out.print("\n        ");
-            }
+        case LOOKUP:
+            parseLookup(b);
             break;
-        case 201:
-            // read a LOOKUPSWITCH default
-            bytesLeft_--;
-            switch1_ = (switch1_ << 8) + b;
-            if( ClassBuilder.DEBUG )
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-            if( bytesLeft_ == 0 ) {
-                state_ = 202;
-                bytesLeft_ = 4;
-                if( ClassBuilder.DEBUG )
-                    System.out.print(" (default=" + switch1_
-                            + ")\n         ");
-                switch1_ = 0;
-            }
+        case TABLE:
+            parseTable(b);
             break;
-        case 202:
-            // read a LOOKUPSWITCH npairs
-            bytesLeft_--;
-            switch1_ = (switch1_ << 8) + b;
-            if( ClassBuilder.DEBUG )
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-            if( bytesLeft_ == 0 ) {
-                state_ = 203;
-                bytesLeft_ = 8;
-                if( ClassBuilder.DEBUG )
-                    System.out.print(" (npairs=" + switch1_
-                            + ")\n         ");
-                switch2_ = 0;
-            }
-            break;
-        case 203:
-            // read LOOKUPSWITCH pairs
-            bytesLeft_--;
-            if( ClassBuilder.DEBUG ) {
-                // work out offset and report
-                switch2_ = (switch2_ << 8) + b;
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-                if( bytesLeft_ == 4 ) {
-                    System.out.print(" (match=" + switch2_ + ") ");
-                    switch2_ = 0;
-                } else if( bytesLeft_ == 0 ) {
-                    System.out.println(" (offset=" + switch2_ + ")");
-                    switch2_ = 0;
-                }
-            }
-            if( bytesLeft_ == 0 ) {
-                // decrement loop count
-                switch1_--;
-                if( switch1_ > 0 ) {
-                    // another 8 bytes of value and offset to read
-                    if( ClassBuilder.DEBUG ) System.out.print("         ");
-                    bytesLeft_ = 8;
-                } else {
-                    // finished statement
-                    state_ = 0;
-                }
-            }
-            break;
-        case 300:
-            // read a TABLESWITCH instruction's padding bytes
-            if( (count_ % 4) == 3 ) {
-                state_ = 301;
-                if( ClassBuilder.DEBUG ) System.out.print("\n         ");
-            }
-            break;
-        case 301:
-            // read a TABLESWITCH default
-            bytesLeft_--;
-            switch1_ = (switch1_ << 8) + b;
-            if( ClassBuilder.DEBUG )
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-            if( bytesLeft_ == 0 ) {
-                state_ = 302;
-                bytesLeft_ = 4;
-                if( ClassBuilder.DEBUG )
-                    System.out.print(" (default=" + switch1_
-                            + ")\n         ");
-                switch1_ = 0;
-            }
-            break;
-        case 302:
-            // read a TABLESWITCH minima
-            bytesLeft_--;
-            switch1_ = (switch1_ << 8) + b;
-            if( ClassBuilder.DEBUG )
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-            if( bytesLeft_ == 0 ) {
-                state_ = 303;
-                bytesLeft_ = 4;
-                if( ClassBuilder.DEBUG )
-                    System.out.print(" (min=" + switch1_ + ")\n         ");
-            }
-            break;
-        case 303:
-            // read a TABLESWITCH maxima
-            bytesLeft_--;
-            switch2_ = (switch2_ << 8) + b;
-            if( ClassBuilder.DEBUG )
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-            if( bytesLeft_ == 0 ) {
-                state_ = 304;
-                bytesLeft_ = 4;
-                if( ClassBuilder.DEBUG )
-                    System.out.print(" (max=" + switch2_ + ")\n         ");
-            }
-            break;
-        case 304:
-            // read a TABLESWITCH destinations
-            if( ClassBuilder.DEBUG )
-                System.out.print(String.format("%02x ", Integer.valueOf(b)));
-            bytesLeft_--;
-            switch3_ = (switch3_ << 8) + b;
-            if( bytesLeft_ == 0 ) {
-                if( ClassBuilder.DEBUG )
-                    System.out.println(" (case:" + switch1_ + " offset="
-                            + switch3_ + ")");
-                switch3_ = 0;
-                switch1_++;
-                if( switch1_ > switch2_ ) {
-                    state_ = 0;
-                } else {
-                    bytesLeft_ = 4;
-                    if( ClassBuilder.DEBUG ) System.out.print("         ");
-                }
-            }
-            break;
+
         }
 
         // have we finished the op-code? If so, inform listener
-        if( (state_ == 0) && (listener_ != null) ) {
+        if( (state_ == State.START) && (listener_ != null) ) {
             listener_.opCodeFinish(lastOpPosition_, buffer_, bufPos_);
         }
 
@@ -394,59 +384,146 @@ public class Parser {
     }
 
 
-    /**
-     * Read a single unsigned byte
-     * 
-     * @param buf
-     *            the buffer holding the byte
-     * @param loc
-     *            where the data is
-     * @return the value
-     */
-    public static int readU1(byte[] buf, int loc) {
-        return 0xff & buf[loc];
+    private void parseLookup(int b) {
+        switch (switchState_) {
+        case PAD:
+            // read a LOOKUPSWITCH instruction's padding bytes
+            if( (count_ % 4) == 3 ) {
+                switchState_ = SwitchState.DEFAULT;
+                if( isDebug_ ) debug_.print("\n        ");
+            }
+            break;
+        case DEFAULT:
+            // read a LOOKUPSWITCH default
+            bytesLeft_--;
+            switch1_ = (switch1_ << 8) + b;
+            if( isDebug_ ) debug_.printf("%02x ", Integer.valueOf(b));
+            if( bytesLeft_ == 0 ) {
+                switchState_ = SwitchState.NPAIRS;
+                bytesLeft_ = 4;
+                if( isDebug_ )
+                    debug_.printf(" (default=%d)\n         ",
+                            Integer.valueOf(switch1_));
+                switch1_ = 0;
+            }
+            break;
+        case NPAIRS:
+            // read a LOOKUPSWITCH npairs
+            bytesLeft_--;
+            switch1_ = (switch1_ << 8) + b;
+            if( isDebug_ ) debug_.printf("%02x ", Integer.valueOf(b));
+            if( bytesLeft_ == 0 ) {
+                switchState_ = SwitchState.CASES;
+                bytesLeft_ = 8;
+                if( isDebug_ )
+                    debug_.printf(" (npairs=%d)\n         ",
+                            Integer.valueOf(switch1_));
+                switch2_ = 0;
+            }
+            break;
+        case CASES:
+            // read LOOKUPSWITCH pairs
+            bytesLeft_--;
+            if( isDebug_ ) {
+                // work out offset and report
+                switch2_ = (switch2_ << 8) + b;
+                debug_.printf("%02x ", Integer.valueOf(b));
+                if( bytesLeft_ == 4 ) {
+                    debug_.printf(" (match=%d) ", Integer.valueOf(switch2_));
+                    switch2_ = 0;
+                } else if( bytesLeft_ == 0 ) {
+                    debug_.printf(" (offset=%d)\n", Integer.valueOf(switch2_));
+                    switch2_ = 0;
+                }
+            }
+            if( bytesLeft_ == 0 ) {
+                // decrement loop count
+                switch1_--;
+                if( switch1_ > 0 ) {
+                    // another 8 bytes of value and offset to read
+                    if( isDebug_ ) debug_.print("         ");
+                    bytesLeft_ = 8;
+                } else {
+                    // finished statement
+                    state_ = State.START;
+                }
+            }
+            break;
+        }
     }
 
 
-    /**
-     * Read a signed int
-     * 
-     * @param buf
-     *            the buffer holding the data
-     * @param loc
-     *            where the data is
-     * @return the value
-     */
-    public static int readS4(byte[] buf, int loc) {
-        return ((buf[loc] & 0xff) << 24) + ((buf[loc + 1] & 0xff) << 16)
-                + ((buf[loc + 2] & 0xff) << 8) + (buf[loc + 3] & 0xff);
-    }
-
-
-    /**
-     * Read an unsigned short
-     * 
-     * @param buf
-     *            the buffer holding the data
-     * @param loc
-     *            where the data is
-     * @return the value
-     */
-    public static int readU2(byte[] buf, int loc) {
-        return ((0xff & buf[loc]) << 8) + (0xff & buf[loc + 1]);
-    }
-
-
-    /**
-     * Read a signed short
-     * 
-     * @param buf
-     *            the buffer holding the data
-     * @param loc
-     *            where the data is
-     * @return the value
-     */
-    static int readS2(byte[] buf, int loc) {
-        return (buf[loc] << 8) | (0xff & buf[loc + 1]);
+    private void parseTable(int b) {
+        switch (switchState_) {
+        case PAD:
+            // read a TABLESWITCH instruction's padding bytes
+            if( (count_ % 4) == 3 ) {
+                switchState_ = SwitchState.DEFAULT;
+                if( isDebug_ ) debug_.print("\n         ");
+            }
+            break;
+        case DEFAULT:
+            // read a TABLESWITCH default
+            bytesLeft_--;
+            switch1_ = (switch1_ << 8) + b;
+            if( isDebug_ ) debug_.printf("%02x ", Integer.valueOf(b));
+            if( bytesLeft_ == 0 ) {
+                switchState_ = SwitchState.MIN;
+                bytesLeft_ = 4;
+                if( isDebug_ )
+                    debug_.printf(" (default=%d)\n         ",
+                            Integer.valueOf(switch1_));
+                switch1_ = 0;
+            }
+            break;
+        case MIN:
+            // read a TABLESWITCH minima
+            bytesLeft_--;
+            switch1_ = (switch1_ << 8) + b;
+            if( isDebug_ ) debug_.printf("%02x ", Integer.valueOf(b));
+            if( bytesLeft_ == 0 ) {
+                switchState_ = SwitchState.MAX;
+                bytesLeft_ = 4;
+                if( isDebug_ )
+                    debug_.printf(" (min=%d)\n         ",
+                            Integer.valueOf(switch1_));
+            }
+            break;
+        case MAX:
+            // read a TABLESWITCH maxima
+            bytesLeft_--;
+            switch2_ = (switch2_ << 8) + b;
+            if( isDebug_ ) debug_.printf("%02x ", Integer.valueOf(b));
+            if( bytesLeft_ == 0 ) {
+                switchState_ = SwitchState.CASES;
+                bytesLeft_ = 4;
+                if( isDebug_ )
+                    debug_.printf(" (max=%d)\n         ",
+                            Integer.valueOf(switch1_));
+            }
+            break;
+        case CASES:
+            // read a TABLESWITCH destinations
+            if( isDebug_ ) debug_.printf("%02x ", Integer.valueOf(b));
+            bytesLeft_--;
+            switch3_ = (switch3_ << 8) + b;
+            if( bytesLeft_ == 0 ) {
+                if( isDebug_ )
+                    debug_.printf(" (case:%d offset:%d)\n",
+                            Integer.valueOf(switch1_),
+                            Integer.valueOf(switch3_));
+                switch3_ = 0;
+                switch1_++;
+                if( switch1_ > switch2_ ) {
+                    // that was the final entry
+                    state_ = State.START;
+                } else {
+                    // more to do
+                    bytesLeft_ = 4;
+                    if( isDebug_ ) debug_.print("         ");
+                }
+            }
+            break;
+        }
     }
 }

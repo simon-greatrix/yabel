@@ -11,7 +11,12 @@ import yabel.ClassBuilder;
 import yabel.OpCodes;
 import yabel.constants.ConstantPool;
 import yabel.constants.ConstantRef;
+import yabel.io.IO;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.util.*;
 
 /**
@@ -22,6 +27,10 @@ import java.util.*;
  * 
  */
 public class ParserAnalyzer implements ParserListener {
+
+    /** File path to write debug messages to */
+    private static String DEBUG_FILE = null;
+
     /** Op-codes that set local variable 0 */
     static final Set<Byte> VAR_OPS_0;
 
@@ -124,7 +133,23 @@ public class ParserAnalyzer implements ParserListener {
         opVars.add(Byte.valueOf(OpCodes.LLOAD_3));
         opVars.add(Byte.valueOf(OpCodes.LSTORE_3));
         VAR_OPS_4 = Collections.unmodifiableSet(opVars);
+        
 
+        String propName = Parser.class.getName() + ".debugFile";
+        String debug = System.getProperty(propName);
+        if( (debug == null) || (debug.equals("")) ) {
+            debug = System.getenv(propName.toUpperCase());
+        }
+        if( (debug != null) && !debug.equals("") ) {
+            File f = new File(debug);
+            File p = f.getParentFile();
+            if( (!p.exists()) && (!p.mkdirs()) ) {
+                System.err.println("Cannot create debug folder "
+                        + p.getAbsolutePath());
+            } else {
+                DEBUG_FILE = debug;
+            }
+        }
     }
 
     /**
@@ -362,6 +387,13 @@ public class ParserAnalyzer implements ParserListener {
 
     /** Maximum stack identified so far */
     int maxStack_ = -1;
+    
+
+    /** Writer for debug messages */
+    private PrintWriter debug_ = null;
+
+    /** Are we generating debug output? */
+    private boolean isDebug_ = false;
 
 
     /**
@@ -400,6 +432,24 @@ public class ParserAnalyzer implements ParserListener {
         }
 
         if( findMaxStack_ || findMaxVars_ ) {
+            if( DEBUG_FILE != null ) {
+                for(int i = 0;i < 0x10000;i++) {
+                    File f = new File(String.format("%s.%04x.log", DEBUG_FILE,
+                            Integer.valueOf(i)));
+                    try {
+                        if( f.createNewFile() ) {
+                            debug_ = new PrintWriter(new FileWriter(f), true);
+                            isDebug_ = true;
+                            break;
+                        }
+                    } catch (IOException e) {
+                        System.err.println("Unable to create debug output to file "
+                                + f);
+                        e.printStackTrace(System.err);
+                    }
+                }
+            }            
+            
             Parser parser = new Parser(this);
             for(int i = 0;i < code.length;i++) {
                 parser.parse(code[i]);
@@ -445,8 +495,8 @@ public class ParserAnalyzer implements ParserListener {
                     block.branchTo_[i] = Integer.valueOf(p + opc.branchTo_[i]);
                 }
                 // if debugging, report new block
-                if( ClassBuilder.DEBUG )
-                    System.out.println(p + " : " + opc + "\t   " + block);
+                if( isDebug_ )
+                    debug_.printf("%6d : %s \t: %s\n",Integer.valueOf(p),String.valueOf(opc),String.valueOf(block));
                 return block;
             }
 
@@ -460,16 +510,16 @@ public class ParserAnalyzer implements ParserListener {
                 } else if( opc.opCode_ == OpCodes.RET ) {
                     block.exitViaRET_ = true;
                 }
-                if( ClassBuilder.DEBUG )
-                    System.out.println(p + " : " + opc + "\t   " + block);
+                if( isDebug_ )
+                    debug_.printf("%6d : %s \t: %s\n",Integer.valueOf(p),String.valueOf(opc),String.valueOf(block));
 
                 // return block
                 return block;
             }
 
             // continue building block
-            if( ClassBuilder.DEBUG )
-                System.out.println(p + " : " + opc + "\t   " + block);
+            if( isDebug_ )
+                debug_.printf("%6d : %s \t: %s\n",Integer.valueOf(p),String.valueOf(opc),String.valueOf(block));
             p = p + opc.length_;
         }
     }
@@ -608,12 +658,12 @@ public class ParserAnalyzer implements ParserListener {
 
     private void updateMaxStack(int position, byte[] buffer, int length) {
         int delta = 0;
-        int opCode = Parser.readU1(buffer, 0);
+        int opCode = IO.readU1(buffer, 0);
         int extra = STACK_MADE[opCode];
         switch (extra) {
         case -1: {
             // it is a field access
-            int v = Parser.readU2(buffer, 1);
+            int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
             String type = cr.getType(cp_);
             if( type.equals("D") ) {
@@ -629,7 +679,7 @@ public class ParserAnalyzer implements ParserListener {
         }
         case -2: {
             // it is a method call
-            int v = Parser.readU2(buffer, 1);
+            int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
             String type = cr.getType(cp_);
             if( type.endsWith(")D") ) {
@@ -652,7 +702,7 @@ public class ParserAnalyzer implements ParserListener {
         switch (less) {
         case -1: {
             // it is a field access
-            int v = Parser.readU2(buffer, 1);
+            int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
             String type = cr.getType(cp_);
             if( type.equals("D") ) {
@@ -672,7 +722,7 @@ public class ParserAnalyzer implements ParserListener {
         }
         case -2: {
             // it is a method call
-            int v = Parser.readU2(buffer, 1);
+            int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
             String type = cr.getType(cp_);
             delta -= ClassBuilder.getArgsForType(type);
@@ -685,7 +735,7 @@ public class ParserAnalyzer implements ParserListener {
         case -3: {
             // it is a multianewarray call
             // byte 3 is the number of dimensions of the array
-            delta -= Parser.readU1(buffer, 3);
+            delta -= IO.readU1(buffer, 3);
             break;
         }
         default:
@@ -705,44 +755,45 @@ public class ParserAnalyzer implements ParserListener {
                 // falls through
             case OpCodes.JSR_W:
                 // 4-byte offset
-                opc.branchTo_ = new int[] { Parser.readS4(buffer, 1) };
+                opc.branchTo_ = new int[] { IO.readS4(buffer, 1) };
                 break;
             case OpCodes.GOTO:
                 // falls through
             case OpCodes.JSR:
                 // 2-byte offset
-                opc.branchTo_ = new int[] { Parser.readS2(buffer, 1) };
+                opc.branchTo_ = new int[] { IO.readS2(buffer, 1) };
                 break;
             case OpCodes.LOOKUPSWITCH: {
                 int s = 8 - (position % 4);
-                int np = Parser.readS4(buffer, s);
+                int np = IO.readS4(buffer, s);
                 int[] to = new int[np + 1];
-                to[0] = Parser.readS4(buffer, s - 4);
+                to[0] = IO.readS4(buffer, s - 4);
                 for(int i = 1;i <= np;i++) {
-                    to[i] = Parser.readS4(buffer, s + 8 * i);
+                    to[i] = IO.readS4(buffer, s + 8 * i);
                 }
                 opc.branchTo_ = to;
                 break;
             }
             case OpCodes.TABLESWITCH: {
                 int s = 12 - (position % 4);
-                int low = Parser.readS4(buffer, s - 4);
-                int high = Parser.readS4(buffer, s);
+                int low = IO.readS4(buffer, s - 4);
+                int high = IO.readS4(buffer, s);
                 int[] to = new int[high - low + 2];
-                to[0] = Parser.readS4(buffer, s - 8);
+                to[0] = IO.readS4(buffer, s - 8);
                 for(int i = 1;i < to.length;i++) {
-                    to[i] = Parser.readS4(buffer, s + 4 * i);
+                    to[i] = IO.readS4(buffer, s + 4 * i);
                 }
                 opc.branchTo_ = to;
                 break;
             }
             default:
                 // 2-byte offset conditional
-                opc.branchTo_ = new int[] { Parser.readS2(buffer, 1), 3 };
+                opc.branchTo_ = new int[] { IO.readS2(buffer, 1), 3 };
                 break;
             }
         }
-        if( ClassBuilder.DEBUG ) System.out.println(position + " " + opc);
+        if( isDebug_ )
+            debug_.printf("MaxStack: %6d : %s\n",Integer.valueOf(position),String.valueOf(opc));
         code_[position] = opc;
     }
 
@@ -764,11 +815,11 @@ public class ParserAnalyzer implements ParserListener {
 
         // check variable operators
         if( VAR_OPS_X.contains(b) ) {
-            int i = Parser.readU1(buffer, 1);
+            int i = IO.readU1(buffer, 1);
             maxLocalVars_ = Math.max(maxLocalVars_, i + 1);
         }
         if( VAR_OPS_X1.contains(b) ) {
-            int i = Parser.readU1(buffer, 1);
+            int i = IO.readU1(buffer, 1);
             maxLocalVars_ = Math.max(maxLocalVars_, i + 2);
         }
 
@@ -776,11 +827,11 @@ public class ParserAnalyzer implements ParserListener {
         if( buffer[0] == OpCodes.WIDE ) {
             b = Byte.valueOf(buffer[1]);
             if( VAR_OPS_X.contains(b) ) {
-                int i = Parser.readU2(buffer, 2);
+                int i = IO.readU2(buffer, 2);
                 maxLocalVars_ = Math.max(maxLocalVars_, i + 1);
             }
             if( VAR_OPS_X1.contains(b) ) {
-                int i = Parser.readU2(buffer, 2);
+                int i = IO.readU2(buffer, 2);
                 maxLocalVars_ = Math.max(maxLocalVars_, i + 2);
             }
         }
