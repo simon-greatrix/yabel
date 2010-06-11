@@ -1,8 +1,6 @@
 package yabel.constants;
 
-
 import yabel.io.IO;
-
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -42,9 +40,10 @@ public class ConstantPool {
     public ConstantPool(InputStream input) throws IOException {
         // how many constants?
         int s = IO.readU2(input);
+
         while( s > 1 ) {
             int tag = IO.readU1(input);
-            Constant c;
+            Constant c = null;
             switch (tag) {
             case 1:
                 c = new ConstantUtf8(input);
@@ -62,26 +61,20 @@ public class ConstantPool {
                 c = new ConstantNumber(6, input);
                 break;
             case 7:
-                c = new ConstantClass(input);
-                break;
+                // falls through
             case 8:
-                c = new ConstantString(input);
-                break;
+                // falls through
             case 9:
-                c = new ConstantFieldRef(input);
-                break;
+                // falls through
             case 10:
-                c = new ConstantMethodRef(input);
-                break;
+                // falls through
             case 11:
-                c = new ConstantInterfaceMethodRef(input);
-                break;
+                // falls through
             case 12:
-                c = new ConstantNameAndType(input);
+                c = new Unresolved(tag, input);
                 break;
             default:
-                throw new IOException("Constant tag type " + tag
-                        + " unknown");
+                throw new IOException("Constant tag type " + tag + " unknown");
             }
 
             s -= c.getPoolSize();
@@ -97,14 +90,25 @@ public class ConstantPool {
 
             // constant may not be canonical
             Constant p = pool_.get(c);
-            if( p == null ) {
-                pool_.put(c, c);
-            }
+            if( p == null ) pool_.put(c, c);
         }
 
-        // validate all the constants
-        for(Constant c:index_) {
-            if( c != null ) c.validate(this);
+        s = index_.size();
+        for(int ph = 0;ph < 3;ph++) {
+            for(int i = 0;i < s;i++) {
+                Constant c = index_.get(i);
+                if( c == null ) continue;
+                if( !(c instanceof Unresolved) ) continue;
+                Unresolved u = (Unresolved) c;
+                c = u.resolve(this,ph);
+                if( c!=null ) {
+                    c.index_ = u.index_;
+                    pool_.remove(u);
+                    index_.set(c.index_, c);
+                    Constant p = pool_.get(c);
+                    if( p == null ) pool_.put(c, c);
+                }
+            }
         }
     }
 
@@ -113,8 +117,8 @@ public class ConstantPool {
      * Canonicalize a constant in this pool
      * 
      * @param val
-     *            The constant to canonicalize. The index field will be
-     *            correct on return.
+     *            The constant to canonicalize. The index field will be correct
+     *            on return.
      * @return the canonical constant
      */
     Constant canonicalize(Constant val) {
@@ -122,14 +126,24 @@ public class ConstantPool {
         if( canon == null ) {
             pool_.put(val, val);
             canon = val;
-            canon.index_ = size_ + 1;
-            size_ += canon.getPoolSize();
+            if( canon.index_ == -1 ) {
+                // new constant, give it an id
+                canon.index_ = size_ + 1;
+                size_ += canon.getPoolSize();
+            } else {
+                // replacement constant - ensure it is not already assigned
+                Constant c = index_.get(canon.index_);
+                if( (c!=null) && ! c.equals(canon) ) {
+                    throw new IllegalStateException("Cannot reassign constant "+canon.index_+" from "+c+" to "+canon);
+                }
+            }
 
             while( index_.size() <= canon.index_ ) {
                 index_.add(null);
             }
             index_.set(canon.index_, canon);
         } else {
+            // just set the id
             val.index_ = canon.index_;
         }
         return canon;
@@ -169,8 +183,7 @@ public class ConstantPool {
      * 
      * @param val
      *            The constant to get.
-     * @return the canonical constant or null if there is no such constant
-     *         yet
+     * @return the canonical constant or null if there is no such constant yet
      */
     Constant getCanon(Constant val) {
         return pool_.get(val);
@@ -202,6 +215,20 @@ public class ConstantPool {
     public int getUtf8(String str, boolean create) {
         ConstantUtf8 utf8 = new ConstantUtf8(this, str, create);
         return utf8.getIndex();
+    }
+    
+    
+    /** {@inheritDoc} */
+    public String toString() {
+        StringBuilder buf = new StringBuilder();
+        buf.append("Pool [");
+        for(int i=0;i<index_.size();i++) {
+            Constant c = index_.get(i);
+            if( c==null ) continue;
+            buf.append("    ").append(i).append(": ").append(c).append('\n');
+        }
+        buf.append("]");
+        return buf.toString();
     }
 
 

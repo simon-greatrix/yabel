@@ -1,9 +1,5 @@
 package yabel.constants;
 
-
-import java.io.IOException;
-import java.io.InputStream;
-
 /**
  * Method reference constant
  * 
@@ -17,14 +13,44 @@ public class ConstantMethodRef extends ConstantRef {
      * @param cp
      *            constant pool
      * @param clss
-     *            class reference
-     * @param method
-     *            method reference
+     *            class name
      * @param type
-     *            type reference
+     *            method name and type
      */
-    public ConstantMethodRef(ConstantPool cp, int clss, int method, int type) {
+    public ConstantMethodRef(ConstantPool cp, ConstantClass clss,
+            ConstantNameAndType type) {
+        super(cp, clss, type);
+    }
+
+
+    /**
+     * New method reference
+     * 
+     * @param cp
+     *            constant pool
+     * @param clss
+     *            class name
+     * @param method
+     *            method name
+     * @param type
+     *            type name
+     */
+    public ConstantMethodRef(ConstantPool cp, ConstantUtf8 clss,
+            ConstantUtf8 method, ConstantUtf8 type) {
         super(cp, clss, method, type);
+    }
+
+
+    /**
+     * Create method reference.
+     * 
+     * @param cp
+     *            constant pool
+     * @param value
+     *            constant to resolve
+     */
+    ConstantMethodRef(ConstantPool cp, Unresolved value) {
+        super(cp, value);
     }
 
 
@@ -46,17 +72,6 @@ public class ConstantMethodRef extends ConstantRef {
     }
 
 
-    /**
-     * Read method reference from stream
-     * 
-     * @param input
-     *            stream
-     */
-    ConstantMethodRef(InputStream input) throws IOException {
-        super(input);
-    }
-
-
     /** {@inheritDoc} */
     @Override
     protected int getTag() {
@@ -67,6 +82,6 @@ public class ConstantMethodRef extends ConstantRef {
     /** {@inheritDoc} */
     @Override
     public String toString() {
-        return index_ + ":MethodRef[ " + class_ + "," + field_ + " ]";
+        return index_ + ":MethodRef[ " + class_ + "," + type_ + " ]";
     }
 }

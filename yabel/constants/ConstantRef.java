@@ -1,11 +1,8 @@
 package yabel.constants;
 
-import yabel.io.IO;
-
-
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+
+import yabel.io.IO;
 
 /**
  * An abstract reference in the constant pool
@@ -15,10 +12,27 @@ import java.io.InputStream;
  */
 public abstract class ConstantRef extends Constant {
     /** The referenced class */
-    protected final int class_;
+    protected final ConstantClass class_;
 
     /** The referenced NameAndType of the class */
-    protected final int field_;
+    protected final ConstantNameAndType type_;
+
+
+    /**
+     * New reference
+     * 
+     * @param cp
+     *            constant pool
+     * @param clss
+     *            class
+     * @param type
+     *            referenced thing
+     */
+    ConstantRef(ConstantPool cp, ConstantClass clss, ConstantNameAndType type) {
+        class_ = clss;
+        type_ = type;
+        canonicalize(cp);
+    }
 
 
     /**
@@ -33,11 +47,26 @@ public abstract class ConstantRef extends Constant {
      * @param type
      *            type
      */
-    ConstantRef(ConstantPool cp, int clss, int ref, int type) {
-        class_ = clss;
-        Constant cnt = new ConstantNameAndType(cp, ref, type);
-        field_ = cnt.getIndex();
+    ConstantRef(ConstantPool cp, ConstantUtf8 clss, ConstantUtf8 ref,
+            ConstantUtf8 type) {
+        class_ = new ConstantClass(cp, clss);
+        type_ = new ConstantNameAndType(cp, ref, type);
         canonicalize(cp);
+    }
+
+
+    /**
+     * New reference
+     * 
+     * @param cp
+     *            constant pool
+     * @param value
+     *            constant to resolve
+     */
+    ConstantRef(ConstantPool cp, Unresolved value) {
+        class_ = cp.validate(value.getValue1(), ConstantClass.class);
+        type_ = cp.validate(value.getValue2(), ConstantNameAndType.class);
+        index_ = value.index_;
     }
 
 
@@ -54,33 +83,20 @@ public abstract class ConstantRef extends Constant {
      *            type
      */
     ConstantRef(ConstantPool cp, String clss, String ref, String type) {
-        Constant cc = new ConstantClass(cp, clss);
-        class_ = cc.getIndex();
-        Constant cnt = new ConstantNameAndType(cp, ref, type);
-        field_ = cnt.getIndex();
+        class_ = new ConstantClass(cp, clss);
+        type_ = new ConstantNameAndType(cp, ref, type);
         canonicalize(cp);
-    }
-
-
-    /**
-     * Read reference constant
-     * 
-     * @param input
-     *            input stream
-     * @throws IOException
-     */
-    ConstantRef(InputStream input) throws IOException {
-        class_ = IO.readU2(input);
-        field_ = IO.readU2(input);
     }
 
 
     /** {@inheritDoc} */
     @Override
     public boolean equals(Object obj) {
+        if( obj == null ) return false;
+        if( obj == this ) return true;
         if( obj instanceof ConstantRef ) {
             ConstantRef other = (ConstantRef) obj;
-            return (other.class_ == class_) && (other.field_ == field_);
+            return other.class_.equals(class_) && other.type_.equals(type_);
         }
         return false;
     }
@@ -89,24 +105,30 @@ public abstract class ConstantRef extends Constant {
     /**
      * Get the class name this reference constants refers to.
      * 
-     * @param cp
-     *            the ConstantPool where the class name is stored
      * @return the class name
      */
-    public String getClass(ConstantPool cp) {
-        return cp.validate(class_, ConstantClass.class).getClass(cp);
+    public ConstantUtf8 getClassName() {
+        return class_.getClassName();
     }
 
 
     /**
-     * Get the method or field name this reference constants refers to.
+     * Get the name of the type of the field or method this reference refers to.
      * 
-     * @param cp
-     *            the ConstantPool where the class name is stored
-     * @return the class name
+     * @return the type name
      */
-    public String getName(ConstantPool cp) {
-        return cp.validate(field_, ConstantNameAndType.class).getName(cp);
+    public ConstantUtf8 getName() {
+        return type_.getName();
+    }
+
+
+    /**
+     * Get the name of the type of the field or method this reference refers to.
+     * 
+     * @return the type name
+     */
+    public ConstantNameAndType getNameAndType() {
+        return type_;
     }
 
 
@@ -119,30 +141,19 @@ public abstract class ConstantRef extends Constant {
 
 
     /**
-     * Get the name of the type of the field or method this reference refers
-     * to.
+     * Get the name of the type of the field or method this reference refers to.
      * 
-     * @param cp
-     *            the ConstantPool containing the type name
      * @return the type name
      */
-    public String getType(ConstantPool cp) {
-        return cp.validate(field_, ConstantNameAndType.class).getType(cp);
+    public ConstantUtf8 getType() {
+        return type_.getType();
     }
 
 
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return (class_ << 16) ^ field_ ^ getTag();
-    }
-
-
-    /** {@inheritDoc} */
-    @Override
-    void validate(ConstantPool cp) {
-        cp.validate(class_, ConstantClass.class);
-        cp.validate(field_, ConstantNameAndType.class);
+        return (class_.getIndex() << 16) ^ type_.getIndex() ^ getTag();
     }
 
 
@@ -150,7 +161,7 @@ public abstract class ConstantRef extends Constant {
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
         baos.write(getTag());
-        IO.writeU2(baos, class_);
-        IO.writeU2(baos, field_);
+        IO.writeU2(baos, class_.getIndex());
+        IO.writeU2(baos, type_.getIndex());
     }
 }

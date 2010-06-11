@@ -1,7 +1,8 @@
 package yabel.attributes;
 
+import yabel.ClassData;
+import yabel.constants.ConstantPool;
 import yabel.io.IO;
-
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -14,16 +15,34 @@ public class GenericAttribute extends Attribute {
 
 
     /**
+     * Create a generic attribute from its specification
+     * 
+     * @param cp
+     *            the constant pool associated with this attribute
+     * @param cd
+     *            the class data defining this attribute
+     */
+    public GenericAttribute(ConstantPool cp, ClassData cd) {
+        super(cp, cd);
+        String s = cd.getSafe(String.class, "data");
+        data_ = IO.decode(s);
+    }
+
+
+    /**
      * Create generic attribute
      * 
+     * @param cp
+     *            the class's constant pool
      * @param id
      *            the attribute name id
      * @param input
      *            the input stream
      * @throws IOException
      */
-    GenericAttribute(int id, InputStream input) throws IOException {
-        super(id);
+    GenericAttribute(ConstantPool cp, int id, InputStream input)
+            throws IOException {
+        super(cp, id);
         int len = IO.readS4(input);
         data_ = new byte[len];
         for(int i = 0;i < len;i++) {
@@ -57,6 +76,15 @@ public class GenericAttribute extends Attribute {
     }
 
 
+    /** {@inheritDoc} */
+    @Override
+    public ClassData toClassData() {
+        ClassData cd = makeClassData();
+        cd.put("data", IO.encode(data_));
+        return cd;
+    }
+
+
     /**
      * Write this attribute to the output.
      * 
@@ -65,7 +93,7 @@ public class GenericAttribute extends Attribute {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, attrId_);
+        IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, data_.length);
         for(int i = 0;i < data_.length;i++) {
             baos.write(data_[i]);

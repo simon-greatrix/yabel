@@ -1,12 +1,9 @@
 package yabel.constants;
 
 
-import yabel.io.IO;
-
-
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+
+import yabel.io.IO;
 
 /**
  * String constant.
@@ -15,11 +12,22 @@ import java.io.InputStream;
  * 
  */
 public class ConstantString extends Constant {
-    /** The actual string value */
-    private String strValue_ = null;
-
     /** Index of Utf8 constant */
-    private final int value_;
+    private final ConstantUtf8 value_;
+
+
+    /**
+     * New string constant
+     * 
+     * @param cp
+     *            constant pool
+     * @param value
+     *            value
+     */
+    public ConstantString(ConstantPool cp, ConstantUtf8 value) {
+        value_ = value;
+        canonicalize(cp);
+    }
 
 
     /**
@@ -31,30 +39,32 @@ public class ConstantString extends Constant {
      *            value
      */
     public ConstantString(ConstantPool cp, String value) {
-        value_ = cp.getUtf8(value);
-        strValue_ = value;
-        canonicalize(cp);
+        this(cp,new ConstantUtf8(cp,value));
     }
 
 
     /**
      * Create new String constant.
      * 
-     * @param in
-     *            input stream
+     * @param cp
+     *            constant pool
+     * @param value
+     *            value to resolve
      */
-    ConstantString(InputStream in) throws IOException {
-        value_ = IO.readU2(in);
-        strValue_ = null;
+    ConstantString(ConstantPool cp, Unresolved value) {
+        value_ = cp.validate(value.getValue1(),ConstantUtf8.class);
+        index_ = value.index_;
     }
 
 
     /** {@inheritDoc} */
     @Override
     public boolean equals(Object obj) {
+        if( obj == null ) return false;
+        if( obj == this ) return true;
         if( obj instanceof ConstantString ) {
             ConstantString other = (ConstantString) obj;
-            return other.value_ == value_;
+            return other.value_.equals(value_);
         }
         return false;
     }
@@ -65,15 +75,15 @@ public class ConstantString extends Constant {
      * 
      * @return the string
      */
-    public String getValue() {
-        return strValue_;
+    public ConstantUtf8 getValue() {
+        return value_;
     }
 
 
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return value_ ^ 8;
+        return value_.getIndex() ^ 8;
     }
 
 
@@ -84,23 +94,10 @@ public class ConstantString extends Constant {
     }
 
 
-    /**
-     * Referenced constant must be a UTF8 constant
-     * 
-     * @param cp
-     *            the constant pool
-     */
-    @Override
-    void validate(ConstantPool cp) {
-        ConstantUtf8 utf8 = cp.validate(value_, ConstantUtf8.class);
-        strValue_ = utf8.get();
-    }
-
-
     /** {@inheritDoc} */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
         baos.write(8);
-        IO.writeU2(baos, value_);
+        IO.writeU2(baos, value_.getIndex());
     }
 }

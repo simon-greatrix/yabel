@@ -19,9 +19,9 @@ import yabel.io.XMLDataReader;
 
 public class Test {
     
-    static void testMethod(String clsName, Method m) {
+    static void testMethod(ClassBuilder cls, Method m) {
         if( (m.getAccess() & (ClassBuilder.ACC_ABSTRACT | ClassBuilder.ACC_NATIVE)) != 0 ) return;
-        System.out.println("Testing "+clsName+" : "+m.getName()+m.getType());
+        System.out.println("Testing "+cls.getName()+" : "+m.getName()+m.getType());
         Code code = m.getCode();
         ClassData dna = code.decompile();
         if(ClassBuilder.DEBUG) System.out.println(dna);
@@ -45,10 +45,6 @@ public class Test {
             throw new Error();
         }
         
-        
-//        System.out.println("max locals = " + code.getMaxLocals());
-//        System.out.println("max stack = " + code.getMaxStack());
-
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         code.writeTo(baos);
         byte[] original = baos.toByteArray();
@@ -64,18 +60,21 @@ public class Test {
         code.writeTo(baos);
         byte[] compiled = baos.toByteArray();
 
+        int len = Math.min(original.length, compiled.length);
+        int diff=-100;
+        for(int i = 0;i < len;i++) {
+            if( ClassBuilder.DEBUG ) {
+                System.out.format("%5d : %02x , %02x %s\n", Integer.valueOf(i-14),
+                        Integer.valueOf(0xff & original[i]), Integer.valueOf(0xff & compiled[i]),
+                        original[i]==compiled[i] ? "" : "****" );
+            }
+            if( original[i] != compiled[i] ) diff=i-14;
+        }
+        if ( diff!=-100 ) throw new Error("Compiled code differs at byte "+diff);
         if( original.length != compiled.length ) {
             throw new Error("Compiled code length differs (original="
                     + original.length + ", compiled=" + compiled.length);
         }
-        for(int i = 0;i < original.length;i++) {
-            if( ClassBuilder.DEBUG ) {
-                System.out.println((i-14)+" : "+(0xff & original[i])+" , "+(0xff & compiled[i]));
-            }
-            if( original[i] != compiled[i] ) {
-                throw new Error("Compiled code differs at byte " + (i-14));
-            }
-        }        
     }
     
     static void testClass(File file) throws IOException {
@@ -85,7 +84,7 @@ public class Test {
 
         Method[] ms = builder.getMethods();
         for(Method m:ms) {
-            testMethod(builder.getName(), m);
+            testMethod(builder, m);
         }
     }
     

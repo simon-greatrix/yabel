@@ -1,9 +1,9 @@
 package yabel.code;
 
+import java.io.ByteArrayOutputStream;
+
 import yabel.parser.Parser;
 import yabel.parser.ParserListener;
-
-import java.io.ByteArrayOutputStream;
 
 /**
  * Stores a stream of byte-code and tracks the starting point of the last
@@ -55,6 +55,22 @@ class CompileStream extends ByteArrayOutputStream implements
     public synchronized void reset() {
         super.reset();
         parser_ = new Parser(this);
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void write(byte[] b, int off, int len) {
+        for(int i=0;i<len;i++) {
+            write(b[i+off]);
+        }
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    public synchronized void write(byte[] b) {
+        write(b,0,b.length);
     }
 
 

@@ -19,22 +19,25 @@ import java.io.InputStream;
  * 
  */
 public class Method implements AttributeListListener {
+    /** Access modifier */
+    private final int access_;
+
+    /** Attributes of this method */
+    private final AttributeList attrList_;
+
     /**
      * ClassBuilder this is a method of
      */
     private final ClassBuilder classBuilder_;
 
-    /** Access modifier */
-    private final int accessMeth_;
-
-    /** Attributes of this method */
-    private final AttributeList methAttrList_;
+    /** The constant pool for this class */
+    private final ConstantPool cp_;
 
     /** Method name */
-    int name_;
+    ConstantUtf8 name_;
 
     /** Method type */
-    final int type_;
+    final ConstantUtf8 type_;
 
 
     /**
@@ -42,18 +45,20 @@ public class Method implements AttributeListListener {
      * 
      * @param input
      *            the stream
-     * @param classBuilder TODO
+     * @param classBuilder
+     *            Class containing this method
      * @throws IOException
      */
     Method(ClassBuilder classBuilder, InputStream input) throws IOException {
-        this.classBuilder_ = classBuilder;
-        accessMeth_ = IO.readU2(input);
-        name_ = IO.readU2(input);
-        this.classBuilder_.cp_.validate(name_, ConstantUtf8.class);
-        type_ = IO.readU2(input);
-        this.classBuilder_.cp_.validate(type_, ConstantUtf8.class);
-        methAttrList_ = new AttributeList(this.classBuilder_.cp_, input);
-        methAttrList_.setOwner(this);
+        classBuilder_ = classBuilder;
+        cp_ = classBuilder_.getConstantPool();
+        access_ = IO.readU2(input);
+        int id = IO.readU2(input);
+        name_ = cp_.validate(id, ConstantUtf8.class);
+        id = IO.readU2(input);
+        type_ = cp_.validate(id, ConstantUtf8.class);
+        attrList_ = new AttributeList(cp_, input);
+        attrList_.setOwner(this);
     }
 
 
@@ -66,25 +71,27 @@ public class Method implements AttributeListListener {
      *            name
      * @param type
      *            type
-     * @param classBuilder TODO
+     * @param classBuilder
+     *            Class containing this method
      */
     Method(ClassBuilder classBuilder, int access, String name, String type) {
-        this.classBuilder_ = classBuilder;
-        accessMeth_ = access;
-        name_ = this.classBuilder_.cp_.getUtf8(name);
-        type_ = this.classBuilder_.cp_.getUtf8(type);
-        methAttrList_ = new AttributeList();
-        methAttrList_.setOwner(this);
+        classBuilder_ = classBuilder;
+        cp_ = classBuilder.getConstantPool();
+        access_ = access;
+        name_ = new ConstantUtf8(cp_, name);
+        type_ = new ConstantUtf8(cp_, type);
+        attrList_ = new AttributeList();
+        attrList_.setOwner(this);
     }
 
 
     /**
-     * The attributes of this method have changed. The "Code" attribute
-     * needs to be told which class and method it is part of.
+     * The attributes of this method have changed. The "Code" attribute needs to
+     * be told which class and method it is part of.
      */
     public void attributesChanged() {
-        Code c = (Code) methAttrList_.get(this.classBuilder_.cp_, Attribute.ATTR_CODE);
-        if( c != null ) c.setOwner(this.classBuilder_, this);
+        Code c = (Code) attrList_.get(cp_, Attribute.ATTR_CODE);
+        if( c != null ) c.setOwner(classBuilder_, this);
     }
 
 
@@ -94,7 +101,7 @@ public class Method implements AttributeListListener {
      * @return the modifier
      */
     public int getAccess() {
-        return accessMeth_;
+        return access_;
     }
 
 
@@ -104,7 +111,7 @@ public class Method implements AttributeListListener {
      * @return the attributes
      */
     public AttributeList getAttributes() {
-        return methAttrList_;
+        return attrList_;
     }
 
 
@@ -114,10 +121,10 @@ public class Method implements AttributeListListener {
      * @return code
      */
     public Code getCode() {
-        Code code = (Code) methAttrList_.get(this.classBuilder_.cp_, Attribute.ATTR_CODE);
+        Code code = (Code) attrList_.get(cp_, Attribute.ATTR_CODE);
         if( code == null ) {
-            code = new Code(this.classBuilder_.cp_);
-            methAttrList_.set(code);
+            code = new Code(cp_);
+            attrList_.set(code);
         }
         return code;
     }
@@ -129,7 +136,7 @@ public class Method implements AttributeListListener {
      * @return the constant pool
      */
     public ConstantPool getConstantPool() {
-        return this.classBuilder_.cp_;
+        return cp_;
     }
 
 
@@ -139,11 +146,11 @@ public class Method implements AttributeListListener {
      * @return exceptions
      */
     public Exceptions getExceptions() {
-        Exceptions excep = (Exceptions) methAttrList_.get(this.classBuilder_.cp_,
+        Exceptions excep = (Exceptions) attrList_.get(cp_,
                 Attribute.ATTR_EXCEPTIONS);
         if( excep == null ) {
-            excep = new Exceptions(this.classBuilder_.cp_);
-            methAttrList_.set(excep);
+            excep = new Exceptions(cp_);
+            attrList_.set(excep);
         }
         return excep;
     }
@@ -154,9 +161,8 @@ public class Method implements AttributeListListener {
      * 
      * @return this method's name
      */
-    public String getName() {
-        ConstantUtf8 co = this.classBuilder_.cp_.validate(name_, ConstantUtf8.class);
-        return co.get();
+    public ConstantUtf8 getName() {
+        return name_;
     }
 
 
@@ -165,21 +171,35 @@ public class Method implements AttributeListListener {
      * 
      * @return this method's name
      */
-    public String getType() {
-        ConstantUtf8 co = this.classBuilder_.cp_.validate(type_, ConstantUtf8.class);
-        return co.get();
+    public ConstantUtf8 getType() {
+        return type_;
     }
 
 
     /**
-     * Set the name of this method. Note that the original method name
-     * remains in the constant pool.
+     * Set the name of this method. Note that the original method name remains
+     * in the constant pool.
      * 
      * @param newName
      *            the new name for this method
      */
     public void setName(String newName) {
-        name_ = this.classBuilder_.cp_.getUtf8(newName);
+        name_ = new ConstantUtf8(cp_, newName);
+    }
+
+
+    /**
+     * Get the ClassData representation of this
+     * 
+     * @return the representation
+     */
+    public ClassData toClassData() {
+        ClassData cd = new ClassData();
+        cd.put("access", ClassBuilder.accessCode(access_));
+        cd.put("name", name_.get());
+        cd.put("type", name_.get());
+        cd.putList(ClassData.class, "attributes", attrList_.toClassData());
+        return cd;
     }
 
 
@@ -190,9 +210,9 @@ public class Method implements AttributeListListener {
      *            output
      */
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, accessMeth_);
-        IO.writeU2(baos, name_);
-        IO.writeU2(baos, type_);
-        methAttrList_.writeTo(baos);
+        IO.writeU2(baos, access_);
+        IO.writeU2(baos, name_.getIndex());
+        IO.writeU2(baos, type_.getIndex());
+        attrList_.writeTo(baos);
     }
 }

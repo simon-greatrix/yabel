@@ -192,13 +192,20 @@ class CodeTokenizer implements Iterator<List<String>> {
                 for(String el:rv) {
                     subTokenizers_.add(new CodeTokenizer(el, replacements_));
                 }
-            } else {
-                String rs = replacements_.get(String.class, k);
+
+                // call back to query sub-tokenizers so return null
+                return null;
+            }
+             
+            String rs = replacements_.get(String.class, k);
+            if( rs!=null ) {
                 subTokenizers_.add(new CodeTokenizer(rs, replacements_));
+
+                // call back to query sub-tokenizer so return null
+                return null;
             }
 
-            // call back to query sub-tokenizers so return null
-            return null;
+            // not expanded
         }
 
         // expand the top level

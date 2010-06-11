@@ -1,8 +1,10 @@
 package yabel.attributes;
 
-import yabel.constants.ConstantPool;
-
 import java.io.ByteArrayOutputStream;
+
+import yabel.ClassData;
+import yabel.constants.ConstantPool;
+import yabel.constants.ConstantUtf8;
 
 /**
  * An attribute.
@@ -39,47 +41,83 @@ abstract public class Attribute {
     public static final String ATTR_SYNTHETIC = "Synthetic";
 
     /** The index of the attribute name in the ConstantPool */
-    protected final int attrId_;
+    protected final ConstantUtf8 attrId_;
 
 
     /**
      * Create a new Attribute of the given named type
      * 
      * @param cp
-     *            the constant pool associated with the class this attribute
-     *            is in
+     *            the constant pool associated with the class this attribute is
+     *            in
      * @param attrName
      *            the name of this attribute type
      */
     protected Attribute(ConstantPool cp, String attrName) {
-        attrId_ = cp.getUtf8(attrName);
+        attrId_ = new ConstantUtf8(cp,attrName);
+    }
+
+
+    /**
+     * Create a new Attribute of the given named type
+     * 
+     * @param cp
+     *            the constant pool associated with the class this attribute is
+     *            in
+     * @param cd
+     *            the class data specifying the name
+     */
+    protected Attribute(ConstantPool cp, ClassData cd) {
+        String s = cd.get(String.class,"name");
+        attrId_ = new ConstantUtf8(cp,s);
     }
 
 
     /**
      * Create a new attribute with the given Id in the constant pool.
      * 
+     * @param cp the class's constant pool
      * @param attrId
      *            the attribute id
      */
-    protected Attribute(int attrId) {
-        attrId_ = attrId;
+    protected Attribute(ConstantPool cp, int attrId) {
+        attrId_ = cp.validate(attrId,ConstantUtf8.class);
     }
 
 
     /**
-     * Get the Id of the Utf8 constant that holds this attribute's name
+     * Get the Utf8 constant that holds this attribute's name
      * 
      * @return the id
      */
-    int getAttrId() {
+    ConstantUtf8 getAttrId() {
         return attrId_;
     }
 
 
     /**
-     * Write this attribute to the byte array stream. The first element
-     * should be a U2 value with the value of <code>attrId_</code>.
+     * Store this attribute in a ClassData structure
+     * 
+     * @return the ClassData
+     */
+    abstract public ClassData toClassData();
+
+
+    /**
+     * Make the initial ClassData structure for this attribute
+     * 
+     * @return the ClassData
+     */
+    protected ClassData makeClassData() {
+        ClassData cd = new ClassData();
+        cd.put("name", attrId_.get());
+        return cd;
+    }
+
+
+    /**
+     * Write this attribute to the byte array stream. The first element should
+     * be a U2 value with the value of <code>attrId_</code>.
      * 
      * @param baos
      *            the stream

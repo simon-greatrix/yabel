@@ -1,7 +1,7 @@
 package yabel.attributes;
 
+import yabel.ClassData;
 import yabel.io.IO;
-
 
 import yabel.constants.ConstantClass;
 import yabel.constants.ConstantPool;
@@ -39,6 +39,24 @@ public class Exceptions extends Attribute {
 
 
     /**
+     * Create a new Exceptions attribute
+     * 
+     * @param cp
+     *            the constant pool associated with this attribute
+     * @param cd
+     *            the class data defining this
+     */
+    public Exceptions(ConstantPool cp, ClassData cd) {
+        super(cp, cd);
+        cp_ = cp;
+        List<String> l = cd.getListSafe(String.class, "exceptions");
+        for(String s:l) {
+            addException(s);
+        }
+    }
+
+
+    /**
      * Read exceptions attribute from input
      * 
      * @param cp
@@ -56,9 +74,8 @@ public class Exceptions extends Attribute {
                             + ". Should be at least 2 and even.");
         int len2 = IO.readU2(input);
         if( (len2 * 2 + 2) != len )
-            throw new IllegalArgumentException(
-                    "Exception attribute of length " + len + " has " + len2
-                            + " exceptions.");
+            throw new IllegalArgumentException("Exception attribute of length "
+                    + len + " has " + len2 + " exceptions.");
         for(int i = 0;i < len2;i++) {
             int c = IO.readU2(input);
             ConstantClass cc = cp.validate(c, ConstantClass.class);
@@ -105,6 +122,19 @@ public class Exceptions extends Attribute {
     }
 
 
+    /** {@inheritDoc} */
+    @Override
+    public ClassData toClassData() {
+        ClassData cd = makeClassData();
+        List<String> es = new ArrayList<String>(excepts_.size());
+        for(ConstantClass cc:excepts_) {
+            es.add(cc.getClassName().get());
+        }
+        cd.putList(String.class, "exceptions", es);
+        return cd;
+    }
+
+
     /**
      * Write Exceptions attribute to stream
      * 
@@ -113,7 +143,7 @@ public class Exceptions extends Attribute {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, attrId_);
+        IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, 2 + 2 * excepts_.size());
         int s = excepts_.size();
         IO.writeU2(baos, s);

@@ -1,14 +1,14 @@
 package yabel;
 
-import yabel.io.IO;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
 import yabel.attributes.AttributeList;
 import yabel.attributes.ConstantValue;
 import yabel.constants.ConstantPool;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import yabel.constants.ConstantUtf8;
+import yabel.io.IO;
 
 /**
  * Field in a class
@@ -24,10 +24,10 @@ public class Field {
     final AttributeList attrList_;
 
     /** Field name */
-    final int name_;
+    final ConstantUtf8 name_;
 
     /** Field type */
-    final int type_;
+    final ConstantUtf8 type_;
 
 
     /**
@@ -41,8 +41,8 @@ public class Field {
      */
     Field(ConstantPool cp, InputStream input) throws IOException {
         access_ = IO.readU2(input);
-        name_ = IO.readU2(input);
-        type_ = IO.readU2(input);
+        name_ = cp.validate(IO.readU2(input), ConstantUtf8.class);
+        type_ = cp.validate(IO.readU2(input), ConstantUtf8.class);
         attrList_ = new AttributeList(cp, input);
     }
 
@@ -64,8 +64,8 @@ public class Field {
     Field(ConstantPool cp, int access, String name, String type,
             ConstantValue value) {
         access_ = access;
-        name_ = cp.getUtf8(name);
-        type_ = cp.getUtf8(type);
+        name_ = new ConstantUtf8(cp, name);
+        type_ = new ConstantUtf8(cp, name);
         attrList_ = new AttributeList();
         attrList_.set(value);
     }
@@ -108,7 +108,7 @@ public class Field {
      * 
      * @return the name's ID
      */
-    public int getNameID() {
+    public ConstantUtf8 getName() {
         return name_;
     }
 
@@ -118,7 +118,7 @@ public class Field {
      * 
      * @return the field's ID
      */
-    public int getTypeID() {
+    public ConstantUtf8 getType() {
         return type_;
     }
 
@@ -126,7 +126,22 @@ public class Field {
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return name_ << 8;
+        return name_.getIndex() << 8;
+    }
+
+
+    /**
+     * Get the ClassData representation of this
+     * 
+     * @return the representation
+     */
+    public ClassData toClassData() {
+        ClassData cd = new ClassData();
+        cd.put("access", ClassBuilder.accessCode(access_));
+        cd.put("name", name_.get());
+        cd.put("type", name_.get());
+        cd.putList(ClassData.class, "attributes", attrList_.toClassData());
+        return cd;
     }
 
 
@@ -138,8 +153,8 @@ public class Field {
      */
     public void writeTo(ByteArrayOutputStream baos) {
         IO.writeU2(baos, access_);
-        IO.writeU2(baos, name_);
-        IO.writeU2(baos, type_);
+        IO.writeU2(baos, name_.getIndex());
+        IO.writeU2(baos, type_.getIndex());
         attrList_.writeTo(baos);
     }
 }

@@ -1,8 +1,8 @@
 package yabel.parser;
 
 import yabel.code.Code;
+import yabel.code.Handler;
 
-import yabel.Handler;
 
 import yabel.Method;
 
@@ -141,9 +141,9 @@ public class ParserAnalyzer implements ParserListener {
             debug = System.getenv(propName.toUpperCase());
         }
         if( (debug != null) && !debug.equals("") ) {
-            File f = new File(debug);
+            File f = new File(debug).getAbsoluteFile();
             File p = f.getParentFile();
-            if( (!p.exists()) && (!p.mkdirs()) ) {
+            if( (p!=null) && (!p.exists()) && (!p.mkdirs()) ) {
                 System.err.println("Cannot create debug folder "
                         + p.getAbsolutePath());
             } else {
@@ -418,7 +418,7 @@ public class ParserAnalyzer implements ParserListener {
             maxLocalVars_ = (access & ClassBuilder.ACC_STATIC) != 0 ? 0 : 1;
 
             // one local var per parameter
-            maxLocalVars_ += ClassBuilder.getArgsForType(method.getType());
+            maxLocalVars_ += ClassBuilder.getArgsForType(method.getType().get());
         }
 
         Code attrCode = method.getCode();
@@ -665,7 +665,7 @@ public class ParserAnalyzer implements ParserListener {
             // it is a field access
             int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
-            String type = cr.getType(cp_);
+            String type = cr.getType().get();
             if( type.equals("D") ) {
                 // get double
                 delta += 2;
@@ -681,7 +681,7 @@ public class ParserAnalyzer implements ParserListener {
             // it is a method call
             int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
-            String type = cr.getType(cp_);
+            String type = cr.getType().get();
             if( type.endsWith(")D") ) {
                 // returns double
                 delta += 2;
@@ -704,7 +704,7 @@ public class ParserAnalyzer implements ParserListener {
             // it is a field access
             int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
-            String type = cr.getType(cp_);
+            String type = cr.getType().get();
             if( type.equals("D") ) {
                 // get double
                 delta -= 2;
@@ -724,7 +724,7 @@ public class ParserAnalyzer implements ParserListener {
             // it is a method call
             int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
-            String type = cr.getType(cp_);
+            String type = cr.getType().get();
             delta -= ClassBuilder.getArgsForType(type);
             if( buffer[0] != OpCodes.INVOKESTATIC ) {
                 // if it is not a static, it uses an object ref
