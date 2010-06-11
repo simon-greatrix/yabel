@@ -1,20 +1,17 @@
 package yabel.attributes;
 
 
-import yabel.io.IO;
-
-import yabel.code.Code;
-
-
-import yabel.constants.ConstantPool;
-import yabel.constants.ConstantUtf8;
-
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import yabel.ClassData;
+import yabel.code.Code;
+import yabel.constants.ConstantPool;
+import yabel.constants.ConstantUtf8;
+import yabel.io.IO;
 
 /**
  * List of attributes associated with part of the class.
@@ -65,7 +62,7 @@ public class AttributeList {
     public Attribute get(ConstantPool cp, String name) {
         int index = cp.getUtf8(name, false);
         for(Attribute a:attrs_) {
-            if( a.getAttrId() == index ) return a;
+            if( a.getAttrId().getIndex() == index ) return a;
         }
         return null;
     }
@@ -92,15 +89,15 @@ public class AttributeList {
             return new Exceptions(cp, input);
         // TODO if( idName.equals(ATTR_INNER_CLASSES) )
         if( idName.equals(Attribute.ATTR_SYNTHETIC) )
-            return new MarkerAttribute(id, idName, input);
+            return new MarkerAttribute(cp, idName, input);
         if( idName.equals(Attribute.ATTR_SOURCE_FILE) )
             return new SourceFileAttribute(cp, input);
         // TODO if( idName.equals(ATTR_LINE_NUMBER_TABLE) )
         // TODO if( idName.equals(ATTR_LOCAL_VARIABLE_TABLE) )
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
-            return new MarkerAttribute(id, idName, input);
+            return new MarkerAttribute(cp, idName, input);
 
-        return new GenericAttribute(id, input);
+        return new GenericAttribute(cp, id, input);
     }
 
 
@@ -117,7 +114,7 @@ public class AttributeList {
         int index = cp.getUtf8(name, false);
         for(int i = 0;i < attrs_.size();i++) {
             Attribute a = attrs_.get(i);
-            if( a.getAttrId() == index ) {
+            if( a.getAttrId().getIndex() == index ) {
                 attrs_.remove(i);
                 return;
             }
@@ -154,6 +151,19 @@ public class AttributeList {
     public void setOwner(AttributeListListener owner) {
         owner_ = owner;
         if( owner_ != null ) owner_.attributesChanged();
+    }
+    
+    
+    /**
+     * Get the ClassData representations of all the attributes in this pool
+     * @return the representations
+     */
+    public List<ClassData> toClassData() {
+        List<ClassData> list = new ArrayList<ClassData>(attrs_.size());
+        for(Attribute attr : attrs_) {
+            list.add(attr.toClassData());
+        }
+        return list;
     }
 
 

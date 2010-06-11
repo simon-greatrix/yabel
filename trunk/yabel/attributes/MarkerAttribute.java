@@ -1,7 +1,7 @@
 package yabel.attributes;
 
+import yabel.ClassData;
 import yabel.io.IO;
-
 
 import yabel.constants.ConstantPool;
 
@@ -19,7 +19,20 @@ import java.io.InputStream;
 public class MarkerAttribute extends Attribute {
 
     /**
-     * Create marker attribtue of the given name
+     * Create a marker attribute from its specification
+     * 
+     * @param cp
+     *            the constant pool associated with this attribute
+     * @param cd
+     *            the class data defining this attribute
+     */
+    public MarkerAttribute(ConstantPool cp, ClassData cd) {
+        super(cp, cd);
+    }
+
+
+    /**
+     * Create marker attribute of the given name
      * 
      * @param cp
      *            the constant pool
@@ -34,21 +47,28 @@ public class MarkerAttribute extends Attribute {
     /**
      * Create a new marker attribute such as a Deprecated or a Synthetic.
      * 
-     * @param id
-     *            the attribute's name constant Id
+     * @param cp
+     *            the class's constant pool
      * @param idName
      *            the attribute's name
      * @param input
      *            the input stream
      * @throws IOException
      */
-    MarkerAttribute(int id, String idName, InputStream input)
+    MarkerAttribute(ConstantPool cp, String idName, InputStream input)
             throws IOException {
-        super(id);
+        super(cp,idName);
         int len = IO.readS4(input);
         if( len != 0 )
             throw new IllegalArgumentException("Marker attribute " + idName
                     + " length is not zero but " + len);
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    public ClassData toClassData() {
+        return makeClassData();
     }
 
 
@@ -57,7 +77,7 @@ public class MarkerAttribute extends Attribute {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, attrId_);
+        IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, 0);
     }
 }

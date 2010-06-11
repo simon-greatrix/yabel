@@ -24,16 +24,16 @@ import java.util.Map.Entry;
  */
 public class Code extends Attribute {
 
-    /** ICONST instructions in order */
-    static final byte[] ICONST_VALS = new byte[] { OpCodes.ICONST_M1,
-            OpCodes.ICONST_0, OpCodes.ICONST_1, OpCodes.ICONST_2,
-            OpCodes.ICONST_3, OpCodes.ICONST_4, OpCodes.ICONST_5 };
-
     /** The actual characters we escape */
     private final static String ESCAPE_CHARS = "\b\t\n\f\r\"'\\";
 
     /** The characters used to represent escape sequences */
     private final static String ESCAPE_VALS = "btnfr\"'\\";
+
+    /** ICONST instructions in order */
+    static final byte[] ICONST_VALS = new byte[] { OpCodes.ICONST_M1,
+            OpCodes.ICONST_0, OpCodes.ICONST_1, OpCodes.ICONST_2,
+            OpCodes.ICONST_3, OpCodes.ICONST_4, OpCodes.ICONST_5 };
 
 
     /**
@@ -82,7 +82,7 @@ public class Code extends Attribute {
                 // octal digit
                 int i1 = i + 1;
                 char ch2 = (i1 < val.length()) ? val.charAt(i1) : 'x';
-                if( (ch2<'0') || ('7'<ch2) ) {
+                if( (ch2 < '0') || ('7' < ch2) ) {
                     // handle special chars and normal octal escapes
                     buf.append('\\');
                     if( ch >= 0100 )
@@ -250,6 +250,9 @@ public class Code extends Attribute {
     /** The exception handlers */
     private List<Handler> handler_ = new ArrayList<Handler>();
 
+    /** History of this code's creation */
+    private List<ClassData> history_ = new ArrayList<ClassData>();
+
     /**
      * Labels in compiled code. First element of list is label target, rest are
      * label references.
@@ -257,10 +260,10 @@ public class Code extends Attribute {
     private Map<String, Label> labels_ = new HashMap<String, Label>();
 
     /** The local variables required */
-    private int maxLocals_ = 0;
+    private int maxLocals_ = -1;
 
     /** The stack slots required */
-    private int maxStack_ = 0;
+    private int maxStack_ = -1;
 
     /** The method this code implements */
     private Method method_ = null;
@@ -308,11 +311,23 @@ public class Code extends Attribute {
         // read exception handlers
         len = IO.readU2(input);
         for(int i = 0;i < len;i++) {
-            handler_.add(new Handler(input));
+            handler_.add(new Handler(cp_, input));
         }
 
         // read attributes
         attrList_ = new AttributeList(cp_, input);
+    }
+
+
+    /**
+     * Add an exception handler
+     * 
+     * @param handler
+     *            class data representation of handler
+     */
+    public void addHandler(ClassData handler) {
+        Handler h = new Handler(cp_, handler);
+        handler_.add(h);
     }
 
 
@@ -330,12 +345,10 @@ public class Code extends Attribute {
      */
     public void addHandler(int startPC, int endPC, int handlerPC,
             String catchType) {
-        int catchId = 0;
-        if( catchType != null ) {
-            ConstantClass cc = new ConstantClass(cp_, catchType);
-            catchId = cc.getIndex();
-        }
-        Handler h = new Handler(startPC, endPC, handlerPC, catchId);
+        ConstantClass cc = null;
+        if( catchType != null ) cc = new ConstantClass(cp_, catchType);
+
+        Handler h = new Handler(startPC, endPC, handlerPC, cc);
         handler_.add(h);
     }
 
@@ -357,12 +370,10 @@ public class Code extends Attribute {
         int startPC = getLabelLocation(startLabel);
         int endPC = getLabelLocation(endLabel);
         int handlerPC = getLabelLocation(handlerLabel);
-        int catchId = 0;
-        if( catchType != null ) {
-            ConstantClass cc = new ConstantClass(cp_, catchType);
-            catchId = cc.getIndex();
-        }
-        Handler h = new Handler(startPC, endPC, handlerPC, catchId);
+        ConstantClass cc = null;
+        if( catchType != null ) cc = new ConstantClass(cp_, catchType);
+
+        Handler h = new Handler(startPC, endPC, handlerPC, cc);
         handler_.add(h);
     }
 
@@ -401,15 +412,26 @@ public class Code extends Attribute {
 
 
     /**
+     * Append a specific byte sequence to the code being built.
+     * 
+     * @param code
+     *            the byte sequence to append
+     */
+    public void appendCode(byte[] code) {
+        pass1_.write(code);
+        ClassData cd = new ClassData();
+        cd.put("bytes", IO.encode(code));
+        history_.add(cd);
+    }
+
+
+    /**
      * Append a single byte to the code currently being compiled.
      * 
      * @param b
      *            the byte to append
      */
-    public void appendU1(byte b) {
-        if( code_ != null )
-            throw new IllegalStateException(
-                    "setByteCode(int,int,byte[]) already called");
+    private void appendU1(byte b) {
         pass1_.write(b);
     }
 
@@ -420,10 +442,7 @@ public class Code extends Attribute {
      * @param i
      *            the value to append
      */
-    public void appendU2(int i) {
-        if( code_ != null )
-            throw new IllegalStateException(
-                    "setByteCode(int,int,byte[]) already called");
+    private void appendU2(int i) {
         IO.writeU2(pass1_, i);
     }
 
@@ -650,9 +669,15 @@ public class Code extends Attribute {
         if( ClassBuilder.DEBUG ) {
             System.out.println("Compile input\n" + raw + "\n" + cd);
         }
-        if( code_ != null )
-            throw new IllegalStateException(
-                    "setByteCode(int,int,byte[]) already called");
+
+        ClassData hist = new ClassData();
+        hist.put("source", raw);
+        hist.put("replacements", new ClassData(cd));
+        history_.add(hist);
+
+        if( cd == null ) cd = new ClassData();
+
+        code_ = null;
         Iterator<List<String>> iter = new CodeTokenizer(raw, cd);
         while( iter.hasNext() ) {
             List<String> toks = iter.next();
@@ -719,8 +744,9 @@ public class Code extends Attribute {
         if( toks.size() != 3 )
             throw new IllegalArgumentException("\"" + lbl
                     + "\" operation accepts a single parameter.");
+
+        // the class name is a String so it will already be resolved
         String ref = toks.get(2);
-        ref = cd.get(String.class, ref, ref);
         int val = getClassRef(ref);
         IO.writeU2(pass1_, val);
         return true;
@@ -737,7 +763,16 @@ public class Code extends Attribute {
             cs = 2;
         } else if( lbl.equals("STRING") ) {
             cs = 3;
+        } else if( lbl.equals("INT") ) {
+            cs = 4;
+        } else if( lbl.equals("FLOAT") ) {
+            cs = 5;
+        } else if( lbl.equals("LONG") ) {
+            cs = 6;
+        } else if( lbl.equals("DOUBLE") ) {
+            cs = 7;
         } else {
+            // not matched
             return false;
         }
 
@@ -758,7 +793,10 @@ public class Code extends Attribute {
         }
         case 1: {
             // compile numeric constant
-            Number n = cd.get(Number.class, toks.get(2));
+            String t2 = toks.get(2);
+            String r2 = isReplacement(t2);
+            if( r2==null ) throw new IllegalArgumentException("Parameter to NUMBER constant must be a replacement.");
+            Number n = cd.getSafe(Number.class, r2);
             int val = getConstantRef(n);
             IO.writeU2(pass1_, val);
             return true;
@@ -771,18 +809,91 @@ public class Code extends Attribute {
                                 + lbl
                                 + "\" operation accepts either a type and value pair. Op-code was:\n"
                                 + toks.get(0));
-            String v = toks.get(3);
-            v = cd.get(String.class, v, v);
-            int val = getConstantRef(toks.get(0), toks.get(2), v);
+            // replacements already handled
+            int val = getConstantRef(toks.get(0), toks.get(2), toks.get(3));
             IO.writeU2(pass1_, val);
             return true;
         }
         case 3: {
-            // compile String
+            // compile String. Replacements already handled.
             String k = toks.get(2);
-            String s = cd.get(String.class, k);
-            if( s == null ) s = k;
-            int val = getConstantRef(s);
+            int val = getConstantRef(k);
+            IO.writeU2(pass1_, val);
+            return true;
+        }
+        case 4: {
+            // int
+            String t2 = toks.get(2);
+            String r2 = isReplacement(t2);
+            Integer n=null;
+            if( r2!=null ) {
+                n = cd.getSafe(Integer.class, r2);
+            } else {
+                try {
+                    n = Integer.valueOf(t2);
+                } catch ( NumberFormatException nfe ) {
+                    throw new IllegalArgumentException("Unable to get integer from \""
+                            + toks.get(0) + "\".");
+                }
+            }
+            int val = getConstantRef(n);
+            IO.writeU2(pass1_, val);
+            return true;
+        }
+        case 5: {
+            // float
+            String t2 = toks.get(2);
+            String r2 = isReplacement(t2);
+            Float n=null;
+            if( r2!=null ) {
+                n = cd.getSafe(Float.class, r2);
+            } else {
+                try {
+                    n = Float.valueOf(t2);
+                } catch ( NumberFormatException nfe ) {
+                    throw new IllegalArgumentException("Unable to get float from \""
+                            + toks.get(0) + "\".");
+                }
+            }
+            int val = getConstantRef(n);
+            IO.writeU2(pass1_, val);
+            return true;
+        }
+        case 6: {
+            // long
+            String t2 = toks.get(2);
+            String r2 = isReplacement(t2);
+            Long n=null;
+            if( r2!=null ) {
+                n = cd.getSafe(Long.class, r2);
+            } else {
+                try {
+                    n = Long.valueOf(t2);
+                } catch ( NumberFormatException nfe ) {
+                    throw new IllegalArgumentException("Unable to get long from \""
+                            + toks.get(0) + "\".");
+                }
+            }
+            int val = getConstantRef(n);
+            IO.writeU2(pass1_, val);
+            return true;
+        }
+        case 7: {
+            // double
+            String t2 = toks.get(2);
+            String r2 = isReplacement(t2);
+            Double n=null;
+            if( r2!=null ) {
+                n = cd.getSafe(Double.class, r2);
+            } else {
+                try {
+                    n = Double.valueOf(t2);
+                } catch ( NumberFormatException nfe ) {
+                    throw new IllegalArgumentException("Unable to get double from \""
+                            + toks.get(0) + "\".");
+                }
+            }
+            int val = getConstantRef(n);
             IO.writeU2(pass1_, val);
             return true;
         }
@@ -832,43 +943,14 @@ public class Code extends Attribute {
         int size = toks.size();
         switch (size) {
         case 3: {
+            // must be a bare name
             String k = toks.get(2);
-            String ref = cd.get(String.class, k);
-            if( ref != null ) {
-                int val = getFieldRef(ref);
-                IO.writeU2(pass1_, val);
-                return true;
-            }
-
-            // wasn't a local field, try for remote field
-            List<String> saRefs = cd.getList(String.class, k);
-            if( saRefs != null ) {
-                // local field as remote
-                if( saRefs.size() == 1 ) {
-                    int val = getFieldRef(saRefs.get(0));
-                    IO.writeU2(pass1_, val);
-                    return true;
-                }
-
-                // remote field
-                if( saRefs.size() == 3 ) {
-                    int val = getFieldRef(saRefs.get(0), saRefs.get(1),
-                            saRefs.get(2));
-                    IO.writeU2(pass1_, val);
-                    return true;
-                }
-
-                // unrecognized
-                throw new IllegalArgumentException("Invalid field reference "
-                        + toks.get(0) + ":\n" + cd);
-            }
-
-            // try for bare name
             int val = getFieldRef(k);
             IO.writeU2(pass1_, val);
             return true;
         }
         case 5: {
+            // must be class, name, type
             int val = getFieldRef(toks.get(2), toks.get(3), toks.get(4));
             IO.writeU2(pass1_, val);
             return true;
@@ -894,26 +976,19 @@ public class Code extends Attribute {
         if( !ok ) return false;
 
         // ensure we have three elements for the reference
-        int size = toks.size();
-        String[] pa = null;
-        if( size == 3 ) {
-            List<String> refs = cd.getList(String.class, toks.get(2));
-            if( refs != null ) pa = refs.toArray(new String[3]);
-        } else if( size == 5 ) {
-            pa = new String[] { toks.get(2), toks.get(3), toks.get(4) };
-        }
-        if( pa == null || (pa.length != 3) ) {
+        if( toks.size() != 5 ) {
             throw new IllegalArgumentException(
                     "Invalid interface method reference: " + toks.get(0));
         }
 
         // got the method details, write out reference
-        int val = getInterfaceMethodRef(pa[0], pa[1], pa[2]);
+        String type = toks.get(4);
+        int val = getInterfaceMethodRef(toks.get(2), toks.get(3), type);
         IO.writeU2(pass1_, val);
 
         // INVOKEINTERFACE requires an extra parameter and a zero
         if( lbl.equals("INVOKEINTERFACE") ) {
-            int nargs = 1 + ClassBuilder.getArgsForType(pa[2]);
+            int nargs = 1 + ClassBuilder.getArgsForType(type);
             pass1_.write(nargs);
             pass1_.write(0);
         }
@@ -978,30 +1053,34 @@ public class Code extends Attribute {
 
         int i = -1;
         switch (toks.size()) {
-        case 3: // raw, LDC, property
-            Object o = cd.get(toks.get(2));
-            if( o != null ) {
-                if( o instanceof Number ) {
-                    // it is a numeric constant
-                    Number n = (Number) o;
-                    i = getConstantRef(n);
-                } else if( o instanceof String ) {
-                    // it is a String constant
-                    String s = (String) o;
-                    i = getConstantRef(s);
-                } else if( o instanceof Class<?> ) {
-                    // undocumented, but constants can be classes
-                    String nm = ((Class<?>) o).getName();
-                    nm = nm.replace('.', '/');
-                    i = getClassRef(nm);
-                }
+        case 3: {
+            // raw, LDC, property
+            String t2 = toks.get(2);
+            String r2 = isReplacement(t2);
+            Object o = t2;
+            if( r2!=null ) o = cd.get(Object.class,r2,t2);
+            if( o instanceof Number ) {
+                // it is a numeric constant
+                Number n = (Number) o;
+                i = getConstantRef(n);
+            } else if( o instanceof String ) {
+                // it is a String constant
+                String s = (String) o;
+                i = getConstantRef(s);
+            } else if( o instanceof Class<?> ) {
+                // undocumented, but constants can be classes
+                String nm = ((Class<?>) o).getName();
+                nm = nm.replace('.', '/');
+                i = getClassRef(nm);
             }
             break;
-        case 4: // raw, LDC, type, value
+        }
+        case 4: {
+            // raw, LDC, type, value
             String v = toks.get(3);
-            v = cd.get(String.class, v, v);
             i = getConstantRef(toks.get(0), toks.get(2), v);
             break;
+        }
         default: // wrong
             throw new IllegalArgumentException(
                     "LDC accepts either a lookup property or a type and value pair. Input was:"
@@ -1103,44 +1182,8 @@ public class Code extends Attribute {
 
         switch (toks.size()) {
         case 3: {
-            String p = toks.get(2);
-            List<String> refs = cd.getList(String.class, p);
-            if( refs == null ) {
-                String v = cd.get(String.class, p);
-                if( v != null ) {
-                    String[] ps = v.split(":");
-                    if( (ps.length == 2) || (ps.length == 3) ) {
-                        refs = new ArrayList<String>(ps.length);
-                        for(String s:ps)
-                            refs.add(s);
-                    } else {
-                        throw new IllegalArgumentException(
-                                "Invalid method reference " + toks.get(0)
-                                        + ". Referencing \"" + v + "\".");
-                    }
-                }
-            }
-            if( refs != null ) {
-                // size 2 is in this class
-                if( refs.size() == 2 ) {
-                    int val = getMethodRef(refs.get(0), refs.get(1));
-                    IO.writeU2(pass1_, val);
-                    return true;
-                }
-                // size 3 is in an explicit class
-                if( refs.size() == 3 ) {
-                    int val = getMethodRef(refs.get(0), refs.get(1),
-                            refs.get(2));
-                    IO.writeU2(pass1_, val);
-                    return true;
-                }
-
-                // any other size is bad
-                throw new IllegalArgumentException("Invalid method reference "
-                        + toks.get(0));
-            }
-
             // try for a reference id in the ClassData
+            String p = toks.get(2);
             int i = getInt(cd, p, toks.get(0));
             IO.writeU2(pass1_, i);
 
@@ -1164,23 +1207,37 @@ public class Code extends Attribute {
 
 
     private boolean compileNewArray(String l, List<String> toks, ClassData cd) {
-        if( !l.equals("NEWARRAY") ) return false;
-        if( toks.size() > 3 )
-            throw new IllegalArgumentException("Operation \"" + l
-                    + "\" accepts a single argument, not " + (toks.size() - 2)
-                    + ". Input was:" + toks.get(0));
-        pass1_.write(OpCodes.NEWARRAY);
-        String p = toks.get(2);
-        String q = cd.get(String.class, p, p);
-        int i = OpCodes.getArrayType(q);
-        if( i != -1 ) {
+        // NEWARRAY has form NEWARRAY <type indicator>
+        if( l.equals("NEWARRAY") ) {
+            if( toks.size() > 3 )
+                throw new IllegalArgumentException("Operation \"" + l
+                        + "\" accepts a single argument, not "
+                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
+            pass1_.write(OpCodes.NEWARRAY);
+            String p = toks.get(2);
+            int i = OpCodes.getArrayType(p);
+            if( i != -1 ) {
+                pass1_.write(i);
+                return true;
+            }
+
+            i = getInt(cd, p, toks.get(0));
             pass1_.write(i);
             return true;
         }
 
-        i = getInt(cd, p, toks.get(0));
-        pass1_.write(i);
-        return true;
+        // MULTIANEWARRAY has form MULTIANEWARRAY <class> <dims>
+        if( l.equals("MULTIANEWARRAY") ) {
+            if( toks.size() != 4 )
+                throw new IllegalArgumentException("Operation \"" + l
+                        + "\" accepts two arguments, not " + (toks.size() - 2)
+                        + ". Input was:" + toks.get(0));
+            pass1_.write(OpCodes.MULTIANEWARRAY);
+            IO.writeU2(pass1_, getClassRef(toks.get(2)));
+            IO.writeU1(pass1_, getInt(cd, toks.get(3), toks.get(0)));
+            return true;
+        }
+        return false;
     }
 
 
@@ -1463,9 +1520,7 @@ public class Code extends Attribute {
      * @return representation of the decompiled code.
      */
     public ClassData decompile() {
-        if( code_ == null )
-            throw new IllegalStateException(
-                    "setByteCode(int,int,byte[]) has not been called");
+        finalizeCode();
 
         Decompiler decomp = new Decompiler(cp_);
         decomp.parse(code_);
@@ -1774,8 +1829,8 @@ public class Code extends Attribute {
         if( f == null )
             throw new IllegalArgumentException("No such field: " + name);
 
-        ConstantFieldRef ref = new ConstantFieldRef(cp_, class_.getClassID(),
-                f.getNameID(), f.getTypeID());
+        ConstantFieldRef ref = new ConstantFieldRef(cp_, class_.getNameUtf8(),
+                f.getName(), f.getType());
         return ref.getIndex();
     }
 
@@ -1809,6 +1864,23 @@ public class Code extends Attribute {
 
 
     /**
+     * Is the field value a replacement? That is, does it start with a '{' and
+     * end with a '}'?
+     * 
+     * @param v
+     *            the field value
+     * @return true if it is a replacement
+     */
+    private static String isReplacement(String v) {
+        int l = v.length()-1;
+        if( l<1 ) return null;
+        if( v.charAt(0) != '{' ) return null;
+        if( v.charAt(l) != '}' ) return null;
+        return v.substring(1,l);
+    }
+
+
+    /**
      * Get an integer.
      * 
      * @param cd
@@ -1820,8 +1892,11 @@ public class Code extends Attribute {
      * @return the integer
      */
     private int getInt(ClassData cd, String fld, String raw) {
-        Integer i = cd.get(Integer.class, fld);
-        if( i != null ) return i.intValue();
+        String r = isReplacement(fld);
+        if( r!=null ) {
+            Integer i = cd.get(Integer.class, fld);
+            if( i != null ) return i.intValue();
+        }
         try {
             return Integer.parseInt(fld);
         } catch (NumberFormatException nfe) {
@@ -1893,10 +1968,8 @@ public class Code extends Attribute {
      * @return reference
      */
     protected int getMethodRef(String name, String type) {
-        int cn = cp_.getUtf8(name);
-        int ct = cp_.getUtf8(type);
-        ConstantMethodRef ref = new ConstantMethodRef(cp_, class_.getClassID(),
-                cn, ct);
+        ConstantMethodRef ref = new ConstantMethodRef(cp_, class_.getName(),
+                name, type);
         return ref.getIndex();
     }
 
@@ -2109,13 +2182,14 @@ public class Code extends Attribute {
 
     /**
      * Reset this code block to completely empty. Note that any constants
-     * associated with the previous code wil not be removed from the constant
+     * associated with the previous code will not be removed from the constant
      * pool.
      */
     public void reset() {
         code_ = null;
         handler_.clear();
         labels_.clear();
+        history_.clear();
         maxLocals_ = -1;
         maxStack_ = -1;
         pass1_.reset();
@@ -2123,25 +2197,24 @@ public class Code extends Attribute {
 
 
     /**
-     * Set the byte code for this Code.
+     * Set the byte code for this Code. Any existing code is discarded. Any
+     * existing label markers are discarded. Exception handlers are retained.
      * 
      * @param maxStack
-     *            the number of stack slots
+     *            The number of stack slots. Use -1 if it is to be calculated.
      * @param maxLocals
-     *            the number of local variables
+     *            The number of local variables. Use -1 if it is to be
+     *            calculated.
      * @param code
      *            the byte code
      */
     public void setByteCode(int maxStack, int maxLocals, byte[] code) {
-        if( pass1_.size() > 0 )
-            throw new IllegalStateException(
-                    "compile(String,ClassData) already called");
+        pass1_.reset();
         maxStack_ = maxStack;
         maxLocals_ = maxLocals;
-        code_ = new byte[code.length];
-        System.arraycopy(code, 0, code_, 0, code.length);
-        handler_.clear();
         labels_.clear();
+        history_.clear();
+        appendCode(code);
     }
 
 
@@ -2170,6 +2243,26 @@ public class Code extends Attribute {
 
 
     /**
+     * Get the class data representation of this Code attribute.
+     * 
+     * @return the representation
+     */
+    public ClassData toClassData() {
+        ClassData cd = new ClassData();
+        cd.putList(ClassData.class, "build", history_);
+        List<ClassData> handlers = new ArrayList<ClassData>(handler_.size());
+        for(Handler h:handler_) {
+            handlers.add(h.toClassData(cp_));
+        }
+        cd.putList(ClassData.class, "handlers", handlers);
+        cd.put("maxLocals", Integer.valueOf(maxLocals_));
+        cd.put("maxStack", Integer.valueOf(maxStack_));
+        cd.putList(ClassData.class, "attributes", attrList_.toClassData());
+        return cd;
+    }
+
+
+    /**
      * Write this Code attribute
      * 
      * @param baos
@@ -2184,7 +2277,7 @@ public class Code extends Attribute {
         attrList_.writeTo(attrs);
         byte[] attrBytes = attrs.toByteArray();
 
-        IO.writeU2(baos, attrId_);
+        IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, 10 + code_.length + handler_.size() * 8
                 + attrBytes.length);
 

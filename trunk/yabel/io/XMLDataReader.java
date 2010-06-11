@@ -87,16 +87,16 @@ public class XMLDataReader {
             // verify element is an entry
             Element entry = (Element) n;
             String tagName = entry.getTagName();
-            if( !(tagName.equals(type1.getTag()) || tagName.equals(type2.getTag())) )
-                if( type1 == type2 ) throw new IllegalArgumentException(
-                        parent.getTagName() + " contains node with tag "
-                                + entry.getTagName() + ". Only "
-                                + type1.getTag() + " is allowed.");
-                else
+            if( !(tagName.equals(type1.getTag()) || tagName.equals(type2.getTag())) ) {
+                if( type1 == type2 )
                     throw new IllegalArgumentException(parent.getTagName()
                             + " contains node with tag " + entry.getTagName()
-                            + ". Only " + type1.getTag() + " or "
-                            + type2.getTag() + " is allowed.");
+                            + ". Only " + type1.getTag() + " is allowed.");
+                throw new IllegalArgumentException(parent.getTagName()
+                        + " contains node with tag " + entry.getTagName()
+                        + ". Only " + type1.getTag() + " or " + type2.getTag()
+                        + " is allowed.");
+            }
             children.add(entry);
         }
         return children;

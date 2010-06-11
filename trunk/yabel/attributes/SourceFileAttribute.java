@@ -1,7 +1,7 @@
 package yabel.attributes;
 
+import yabel.ClassData;
 import yabel.io.IO;
-
 
 import yabel.constants.ConstantPool;
 import yabel.constants.ConstantUtf8;
@@ -20,6 +20,21 @@ public class SourceFileAttribute extends Attribute {
     /** The Utf8 constant that holds the source file name */
     private ConstantUtf8 source_;
 
+    
+    /**
+     * Create a marker attribute from its specification
+     * 
+     * @param cp
+     *            the constant pool associated with this attribute
+     * @param cd
+     *            the class data defining this attribute
+     */
+    public SourceFileAttribute(ConstantPool cp, ClassData cd) {
+        super(cp,cd);
+        String sourceFile = cd.getSafe(String.class,"source");
+        source_ = new ConstantUtf8(cp, sourceFile);
+    }
+
 
     /**
      * New source file attribute.
@@ -29,8 +44,7 @@ public class SourceFileAttribute extends Attribute {
      * @param input
      *            stream class is being read from
      */
-    SourceFileAttribute(ConstantPool cp, InputStream input)
-            throws IOException {
+    SourceFileAttribute(ConstantPool cp, InputStream input) throws IOException {
         super(cp, Attribute.ATTR_SOURCE_FILE);
         int len = IO.readS4(input);
         if( len != 2 )
@@ -78,6 +92,15 @@ public class SourceFileAttribute extends Attribute {
     }
 
 
+    /** {@inheritDoc} */
+    @Override
+    public ClassData toClassData() {
+        ClassData cd = makeClassData();
+        cd.put("source", source_.get());
+        return cd;
+    }
+
+
     /**
      * Write this attribute to the output.
      * 
@@ -86,7 +109,7 @@ public class SourceFileAttribute extends Attribute {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, attrId_);
+        IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, 2);
         IO.writeU2(baos, source_.getIndex());
     }

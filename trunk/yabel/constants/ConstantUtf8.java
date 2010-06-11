@@ -119,6 +119,8 @@ public class ConstantUtf8 extends Constant {
     /** {@inheritDoc} */
     @Override
     public boolean equals(Object obj) {
+        if( obj == null ) return false;
+        if( obj == this ) return true;
         if( obj instanceof ConstantUtf8 ) {
             return value_.equals(((ConstantUtf8) obj).value_);
         }

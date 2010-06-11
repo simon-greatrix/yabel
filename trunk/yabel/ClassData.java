@@ -82,11 +82,6 @@ public class ClassData extends LinkedHashMap<String, Object> {
             list_ = list;
             clss_ = clss;
         }
-        
-        
-        public Class<T> getType() {
-            return clss_;
-        }
 
 
         /**
@@ -106,10 +101,34 @@ public class ClassData extends LinkedHashMap<String, Object> {
             }
             return null;
         }
+
+
+        public Class<T> getType() {
+            return clss_;
+        }
     }
 
     /** serial version UID */
     private static final long serialVersionUID = 7439179816314472328L;
+
+
+    /**
+     * Create new empty ClassData
+     */
+    public ClassData() {
+    // do nothing
+    }
+
+
+    /**
+     * Create a copy of the supplied ClassData
+     * 
+     * @param orig
+     *            the original ClassData
+     */
+    public ClassData(ClassData orig) {
+        super(orig);
+    }
 
 
     /**
@@ -169,6 +188,44 @@ public class ClassData extends LinkedHashMap<String, Object> {
 
 
     /**
+     * Get a List from the map if it contains the correct type
+     * 
+     * @param <T>
+     *            the required class
+     * @param clss
+     *            the class of the required type
+     * @param key
+     *            the key to lookup
+     * @return the list if it exists and matches, or null
+     */
+    public <T> List<T> getListSafe(Class<T> clss, String key) {
+        List<T> l = getList(clss, key);
+        if( l != null ) return l;
+        throw new IllegalStateException("Missing required list for '" + key
+                + "' of class " + clss.getName());
+    }
+
+
+    /**
+     * Get the map entry if it is of the correct type.
+     * 
+     * @param <T>
+     *            the required type
+     * @param clss
+     *            the class of the required type
+     * @param key
+     *            the key to lookup
+     * @return the data if present, otherwise null
+     */
+    public <T> T getSafe(Class<T> clss, String key) {
+        T t = get(clss, key);
+        if( t != null ) return t;
+        throw new IllegalStateException("Missing required value for '" + key
+                + "' of class " + clss.getName());
+    }
+
+
+    /**
      * Put a named value into this.
      * 
      * @param nv
@@ -177,12 +234,6 @@ public class ClassData extends LinkedHashMap<String, Object> {
      */
     public Object put(NamedValue nv) {
         return putInternal(nv.getKey(), nv.getValue());
-    }
-    
-    
-    private Object putInternal(String key, Object value) {
-        if( key==null || key.equals("") ) throw new IllegalArgumentException("Key must be specified and not empty");
-        return super.put(key,value);
     }
 
 
@@ -195,6 +246,22 @@ public class ClassData extends LinkedHashMap<String, Object> {
             throw new Error("Lists must be put into the map using put List");
         }
         return putInternal(key, value);
+    }
+
+
+    private Object putInternal(String key, Object value) {
+        if( key == null || key.equals("") )
+            throw new IllegalArgumentException(
+                    "Key must be specified and not empty");
+        if( value != null ) {
+            if( !((value instanceof String) || (value instanceof Number)
+                    || (value instanceof SwitchData)
+                    || (value instanceof ClassData) || (value instanceof TypedList<?>)) ) {
+                throw new IllegalArgumentException("Unhandled class "
+                        + value.getClass() + " for key " + key);
+            }
+        }
+        return super.put(key, value);
     }
 
 

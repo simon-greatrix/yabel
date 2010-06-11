@@ -1,7 +1,7 @@
 package yabel.attributes;
 
+import yabel.ClassData;
 import yabel.io.IO;
-
 
 import yabel.constants.Constant;
 import yabel.constants.ConstantNumber;
@@ -62,6 +62,27 @@ public class ConstantValue extends Attribute {
 
 
     /**
+     * Create a new ConstantValue from its class data representation
+     * 
+     * @param cp
+     *            the constant pool associated with this constant
+     * @param cd
+     *            the class data
+     */
+    public ConstantValue(ConstantPool cp, ClassData cd) {
+        super(cp, cd);
+        Object v = cd.getSafe(Object.class, "value");
+        if( v instanceof Number ) {
+            value_ = new ConstantNumber(cp, (Number) v);
+        } else if( v instanceof String ) {
+            value_ = new ConstantString(cp, (String) v);
+        }
+        throw new IllegalArgumentException(
+                "ConstantValue cannot hold a value of class " + v.getClass());
+    }
+
+
+    /**
      * New ConstantValue attribute
      * 
      * @param cp
@@ -110,14 +131,12 @@ public class ConstantValue extends Attribute {
      *            the stream
      * @throws IOException
      */
-    public ConstantValue(ConstantPool cp, InputStream input)
-            throws IOException {
+    public ConstantValue(ConstantPool cp, InputStream input) throws IOException {
         super(cp, Attribute.ATTR_CONSTANT_VALUE);
         int len = IO.readS4(input);
         if( len != 2 )
             throw new IllegalArgumentException(
-                    "Length of ConstantValue attribute is " + len
-                            + " not 2");
+                    "Length of ConstantValue attribute is " + len + " not 2");
         int val = IO.readU2(input);
         value_ = cp.get(val);
     }
@@ -210,9 +229,20 @@ public class ConstantValue extends Attribute {
      */
     public String getStringValue() {
         if( value_ instanceof ConstantString ) {
-            return ((ConstantString) value_).getValue();
+            return ((ConstantString) value_).getValue().get();
         }
         return null;
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    public ClassData toClassData() {
+        ClassData cd = makeClassData();
+        Object o = getNumericValue();
+        if( o == null ) o = getStringValue();
+        cd.put("value", o);
+        return cd;
     }
 
 
@@ -224,7 +254,7 @@ public class ConstantValue extends Attribute {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, attrId_);
+        IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, 2);
         IO.writeU2(baos, value_.getIndex());
     }

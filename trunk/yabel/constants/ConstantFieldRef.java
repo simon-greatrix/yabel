@@ -1,28 +1,26 @@
 package yabel.constants;
 
-
-import java.io.IOException;
-import java.io.InputStream;
-
 /**
  * A field reference constant
  * 
  * @author Simon Greatrix
  */
 public class ConstantFieldRef extends ConstantRef {
+
     /**
      * New field reference
      * 
      * @param cp
      *            constant pool
      * @param clss
-     *            class reference
+     *            class name
      * @param field
-     *            field reference
+     *            field name
      * @param type
-     *            type reference
+     *            type name
      */
-    public ConstantFieldRef(ConstantPool cp, int clss, int field, int type) {
+    public ConstantFieldRef(ConstantPool cp, String clss, String field,
+            String type) {
         super(cp, clss, field, type);
     }
 
@@ -39,19 +37,38 @@ public class ConstantFieldRef extends ConstantRef {
      * @param type
      *            type name
      */
-    public ConstantFieldRef(ConstantPool cp, String clss, String field, String type) {
+    public ConstantFieldRef(ConstantPool cp, ConstantUtf8 clss,
+            ConstantUtf8 field, ConstantUtf8 type) {
         super(cp, clss, field, type);
     }
 
 
     /**
-     * Read field reference from stream
+     * New field reference
      * 
-     * @param input
-     *            stream
+     * @param cp
+     *            constant pool
+     * @param clss
+     *            class name
+     * @param type
+     *            type name
      */
-    ConstantFieldRef(InputStream input) throws IOException {
-        super(input);
+    public ConstantFieldRef(ConstantPool cp, ConstantClass clss,
+            ConstantNameAndType type) {
+        super(cp, clss, type);
+    }
+
+
+    /**
+     * Create field reference
+     * 
+     * @param cp
+     *            constant pool
+     * @param value
+     *            constant to resolve
+     */
+    ConstantFieldRef(ConstantPool cp, Unresolved value) {
+        super(cp, value);
     }
 
 
@@ -65,6 +82,6 @@ public class ConstantFieldRef extends ConstantRef {
     /** {@inheritDoc} */
     @Override
     public String toString() {
-        return index_ + ":FieldRef[ " + class_ + "," + field_ + " ]";
+        return index_ + ":FieldRef[ " + class_ + "," + type_ + " ]";
     }
 }

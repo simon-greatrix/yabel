@@ -17,7 +17,6 @@ import yabel.SwitchData;
 import yabel.ClassData.NamedValue;
 import yabel.ClassData.TypedList;
 import yabel.SwitchData.Case;
-import yabel.code.Code;
 
 /**
  * Types that can be in the XML file.

@@ -173,9 +173,9 @@ public class Parser {
             debug = System.getenv(propName.toUpperCase());
         }
         if( (debug != null) && !debug.equals("") ) {
-            File f = new File(debug);
+            File f = new File(debug).getAbsoluteFile();
             File p = f.getParentFile();
-            if( (!p.exists()) && (!p.mkdirs()) ) {
+            if( (p!=null) && (!p.exists()) && (!p.mkdirs()) ) {
                 System.err.println("Cannot create debug folder "
                         + p.getAbsolutePath());
             } else {
@@ -249,6 +249,7 @@ public class Parser {
                     e.printStackTrace(System.err);
                 }
             }
+            new Throwable().printStackTrace(debug_);
         }
     }
 
@@ -449,6 +450,9 @@ public class Parser {
                 }
             }
             break;
+        case MAX:
+        case MIN:
+            throw new IllegalStateException("Encountered state "+switchState_+" when parsing LOOKUPSWITCH");
         }
     }
 
@@ -524,6 +528,8 @@ public class Parser {
                 }
             }
             break;
+        case NPAIRS:
+            throw new IllegalStateException("Encountered state "+switchState_+" when parsing TABLESWITCH");
         }
     }
 }

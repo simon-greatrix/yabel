@@ -1,12 +1,8 @@
 package yabel.constants;
 
+import java.io.ByteArrayOutputStream;
 
 import yabel.io.IO;
-
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
 
 /**
  * A Class Reference constant
@@ -16,7 +12,7 @@ import java.io.InputStream;
  */
 public class ConstantClass extends Constant {
     /** Reference to Utf8 class name */
-    final int name_;
+    final ConstantUtf8 name_;
 
 
     /**
@@ -25,11 +21,25 @@ public class ConstantClass extends Constant {
      * @param cp
      *            constant pool
      * @param name
-     *            index of class name
+     *            class name
      */
-    public ConstantClass(ConstantPool cp, int name) {
+    public ConstantClass(ConstantPool cp, ConstantUtf8 name) {
         name_ = name;
         canonicalize(cp);
+    }
+
+
+    /**
+     * Create new Class Reference.
+     * 
+     * @param cp
+     *            constant pool
+     * @param value
+     *            value to resolve
+     */
+    ConstantClass(ConstantPool cp, Unresolved value) {
+        name_ = cp.validate(value.getValue1(), ConstantUtf8.class);
+        index_ = value.index_;
     }
 
 
@@ -42,28 +52,18 @@ public class ConstantClass extends Constant {
      *            class name
      */
     public ConstantClass(ConstantPool cp, String name) {
-        name_ = cp.getUtf8(name);
-        canonicalize(cp);
-    }
-
-
-    /**
-     * Create new Class Reference.
-     * 
-     * @param in
-     *            input stream
-     */
-    public ConstantClass(InputStream in) throws IOException {
-        name_ = IO.readU2(in);
+        this(cp,new ConstantUtf8(cp, name));
     }
 
 
     /** {@inheritDoc} */
     @Override
     public boolean equals(Object obj) {
+        if( obj == null ) return false;
+        if( obj == this ) return true;
         if( obj instanceof ConstantClass ) {
             ConstantClass other = (ConstantClass) obj;
-            return name_ == other.name_;
+            return name_.equals(other.name_);
         }
         return false;
     }
@@ -74,7 +74,7 @@ public class ConstantClass extends Constant {
      * 
      * @return the index of the Utf8 name
      */
-    public int get() {
+    public ConstantUtf8 get() {
         return name_;
     }
 
@@ -82,19 +82,17 @@ public class ConstantClass extends Constant {
     /**
      * Get the class name from the constant pool
      * 
-     * @param cp
-     *            the pool
      * @return the name
      */
-    public String getClass(ConstantPool cp) {
-        return cp.validate(name_, ConstantUtf8.class).get();
+    public ConstantUtf8 getClassName() {
+        return name_;
     }
 
 
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return name_ ^ 7;
+        return name_.getIndex() ^ 7;
     }
 
 
@@ -105,22 +103,10 @@ public class ConstantClass extends Constant {
     }
 
 
-    /**
-     * Referenced constant must be a UTF8 constant
-     * 
-     * @param cp
-     *            the constant pool
-     */
-    @Override
-    void validate(ConstantPool cp) {
-        cp.validate(name_, ConstantUtf8.class);
-    }
-
-
     /** {@inheritDoc} */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
         baos.write(7);
-        IO.writeU2(baos, name_);
+        IO.writeU2(baos, name_.getIndex());
     }
 }

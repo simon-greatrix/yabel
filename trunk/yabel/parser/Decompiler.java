@@ -1,9 +1,10 @@
 package yabel.parser;
 
 import yabel.ClassData;
-import yabel.Handler;
 import yabel.OpCodes;
 import yabel.SwitchData;
+import yabel.code.Code;
+import yabel.code.Handler;
 import yabel.constants.*;
 import yabel.io.IO;
 
@@ -63,7 +64,7 @@ public class Decompiler implements ParserListener {
     /** Labels generated for the decompiled code */
     private final Set<Integer> labels_ = new HashSet<Integer>();
 
-    /** The decompilation result */
+    /** The de-compilation result */
     private final ClassData result_ = new ClassData();
 
 
@@ -76,13 +77,13 @@ public class Decompiler implements ParserListener {
     public Decompiler(ConstantPool cp) {
         cp_ = cp;
         result_.put("data", cd_);
-        result_.putList(ClassData.class,"handlers", handlers_);
+        result_.putList(ClassData.class, "handlers", handlers_);
     }
 
 
     /**
-     * Inform this decompiler of an exception handler associated with the
-     * code block it is working on
+     * Inform this decompiler of an exception handler associated with the code
+     * block it is working on
      * 
      * @param h
      *            the exception handler
@@ -100,13 +101,11 @@ public class Decompiler implements ParserListener {
         labels_.add(i);
 
         // the type may be null for a catch-everything handler
-        if( h.getCatchType() == 0 ) {
-            cd.put("type",null);
+        ConstantClass catchType = h.getCatchType();
+        if( catchType == null ) {
+            cd.put("type", null);
         } else {
-            // specific class - get its constant
-            ConstantClass cc = cp_.validate(h.getCatchType(),
-                    ConstantClass.class);
-            cd.put("type", cc.getClass(cp_));
+            cd.put("type", catchType.getClassName().get());
         }
 
         // save to class data
@@ -126,7 +125,8 @@ public class Decompiler implements ParserListener {
         String cNm = String.format("class%04x", Integer.valueOf(v));
         if( cd_.containsKey(cNm) ) return cNm;
         ConstantClass conCls = cp_.validate(v, ConstantClass.class);
-        cd_.put(cNm, conCls.getClass(cp_));
+        String n = conCls.getClassName().get();
+        cd_.put(cNm, Code.escapeJava(n));
         return cNm;
     }
 
@@ -141,28 +141,7 @@ public class Decompiler implements ParserListener {
         case OpCodes.LDC:
             // Constants are quite complicated
             int c = 0xff & buffer[1];
-            String nm = String.format("con%04x", Integer.valueOf(c));
-            Constant con = cp_.get(c);
-            if( con instanceof ConstantNumber ) {
-                // Constant is a number type, so can use a numeric lookup
-                Number n = ((ConstantNumber) con).getValue();
-                cd_.put(nm,n);
-            } else if( con instanceof ConstantString ) {
-                // strings are simple
-                cd_.put(nm, ((ConstantString) con).getValue());
-            } else if( con instanceof ConstantClass ) {
-                // classes must have an explicit type
-                opc.opCode_ = "LDC:class:{" + nm + "}";
-                cd_.put(nm, ((ConstantClass) con).getClass(cp_));
-                return;
-            } else {
-                // other types not handled
-                throw new IllegalArgumentException(
-                        "Constant for LDC is not a string nor a number: "
-                                + con);
-            }
-            buf_.append("LDC:").append(nm);
-            opc.opCode_ = buf_.toString();
+            opc.opCode_ = decompileLDC(c);
             return;
         case OpCodes.NEWARRAY:
             buf_.append("NEWARRAY:").append(OpCodes.getArrayType(buffer[1]));
@@ -177,6 +156,31 @@ public class Decompiler implements ParserListener {
     }
 
 
+    private String decompileLDC(int c) {
+        String nm = String.format("con%04x", Integer.valueOf(c));
+        Constant con = cp_.get(c);
+        if( con instanceof ConstantNumber ) {
+            // Constant is a number type, so can use a numeric lookup
+            Number n = ((ConstantNumber) con).getValue();
+            cd_.put(nm, n);
+        } else if( con instanceof ConstantString ) {
+            // strings are simple
+            String v = ((ConstantString) con).getValue().get();
+            cd_.put(nm, Code.escapeJava(v));
+        } else if( con instanceof ConstantClass ) {
+            // classes must have an explicit type
+            String v = ((ConstantClass) con).getClassName().get();
+            cd_.put(nm, Code.escapeJava(v));
+            return "LDC:class:{" + nm + "}";
+        } else {
+            // other types not handled
+            throw new IllegalArgumentException(
+                    "Constant for LDC is not a string nor a number: " + con);
+        }
+        return "LDC:{" + nm + "}";
+    }
+
+
     private void decompile3(int position, byte[] buffer, int length,
             Decompiler.OpCode opc) {
         int op = 0xff & buffer[0];
@@ -184,15 +188,14 @@ public class Decompiler implements ParserListener {
         switch (buffer[0]) {
         // handle special cases
         case OpCodes.IINC:
-            buf_.append("IINC:").append(IO.readU1(buffer, 1)).append(
-                    ':').append(buffer[2]);
+            buf_.append("IINC:").append(IO.readU1(buffer, 1)).append(':').append(
+                    buffer[2]);
             opc.opCode_ = buf_.toString();
             return;
         case OpCodes.LDC_W:
             // falls through
         case OpCodes.LDC2_W:
-            buf_.append("LDC:").append(v);
-            opc.opCode_ = buf_.toString();
+            opc.opCode_ = decompileLDC(v);
             return;
         case OpCodes.SIPUSH:
             buf_.append("ICONST:").append((short) v);
@@ -206,7 +209,8 @@ public class Decompiler implements ParserListener {
             // falls through
         case OpCodes.INVOKEVIRTUAL: {
             String mNm = refToData("method", v);
-            buf_.append(OpCodes.getOpName(op)).append(':').append(mNm);
+            buf_.append(OpCodes.getOpName(op)).append(":{").append(mNm).append(
+                    '}');
             opc.opCode_ = buf_.toString();
             return;
         }
@@ -221,7 +225,8 @@ public class Decompiler implements ParserListener {
         case OpCodes.NEW: {
             String cNm = classToData(v);
 
-            buf_.append(OpCodes.getOpName(op)).append(':').append(cNm);
+            buf_.append(OpCodes.getOpName(op)).append(":{").append(cNm).append(
+                    '}');
             opc.opCode_ = buf_.toString();
             return;
         }
@@ -235,7 +240,8 @@ public class Decompiler implements ParserListener {
             // falls through
         case OpCodes.PUTSTATIC: {
             String mNm = refToData("field", v);
-            buf_.append(OpCodes.getOpName(op)).append(':').append(mNm);
+            buf_.append(OpCodes.getOpName(op)).append(":{").append(mNm).append(
+                    '}');
             opc.opCode_ = buf_.toString();
             return;
         }
@@ -260,8 +266,8 @@ public class Decompiler implements ParserListener {
         switch (buffer[0]) {
         case OpCodes.MULTIANEWARRAY: {
             int v = IO.readU2(buffer, 1);
-            buf_.append("MULTIANEWARRAY CLASS:").append(classToData(v)).append(
-                    " U1:").append(IO.readU1(buffer, 3));
+            buf_.append("MULTIANEWARRAY:{").append(classToData(v)).append("}:").append(
+                    IO.readU1(buffer, 3));
             opc.opCode_ = buf_.toString();
             return;
         }
@@ -292,15 +298,15 @@ public class Decompiler implements ParserListener {
             Integer iaddr = Integer.valueOf(addr);
             String lNm = String.format("lbl%04x", iaddr);
             labels_.add(iaddr);
-            buf_.append((buffer[0] == OpCodes.JSR_W) ? "JSR" : "GOTO").append(" #:").append(
-                    lNm);
+            buf_.append((buffer[0] == OpCodes.JSR_W) ? "JSR" : "GOTO").append(
+                    " #:").append(lNm);
             opc.opCode_ = buf_.toString();
             return;
         }
         case OpCodes.INVOKEINTERFACE: {
             int v = IO.readU2(buffer, 1);
             String iNm = refToData("iface", v);
-            buf_.append("INVOKEINTERFACE:").append(iNm);
+            buf_.append("INVOKEINTERFACE:{").append(iNm).append('}');
             opc.opCode_ = buf_.toString();
             return;
         }
@@ -326,13 +332,13 @@ public class Decompiler implements ParserListener {
     }
 
 
-    private void decompileLookupSwitch(int position, byte[] buffer,
-            int length, Decompiler.OpCode opc) {
+    private void decompileLookupSwitch(int position, byte[] buffer, int length,
+            Decompiler.OpCode opc) {
         // format is:
         // LOOKUPSWITCH
         // <padding>
         // default
-        // npairs
+        // n-pairs
         // match - offset
         // match - offset ...
         int p = 4 - (position % 4);
@@ -366,8 +372,8 @@ public class Decompiler implements ParserListener {
     }
 
 
-    private void decompileTableSwitch(int position, byte[] buffer,
-            int length, Decompiler.OpCode opc) {
+    private void decompileTableSwitch(int position, byte[] buffer, int length,
+            Decompiler.OpCode opc) {
         // format is:
         // TABLESWITCH
         // <padding>
@@ -436,8 +442,8 @@ public class Decompiler implements ParserListener {
 
 
     /**
-     * Accept notification that a set of byte-codes have been recognised as
-     * a complete op-code and can be added to the de-compilation.
+     * Accept notification that a set of byte-codes have been recognised as a
+     * complete op-code and can be added to the de-compilation.
      * 
      * @param position
      *            where in the code we are
@@ -516,11 +522,11 @@ public class Decompiler implements ParserListener {
         ConstantRef con = cp_.validate(v, ConstantRef.class);
 
         List<String> sa = new ArrayList<String>(3);
-        sa.add(con.getClass(cp_));
-        sa.add(con.getName(cp_));
-        sa.add(con.getType(cp_));
+        sa.add(Code.escapeJava(con.getClassName().get()));
+        sa.add(Code.escapeJava(con.getName().get()));
+        sa.add(Code.escapeJava(con.getType().get()));
 
-        cd_.putList(String.class,pNm, sa);
+        cd_.putList(String.class, pNm, sa);
 
         return pNm;
     }

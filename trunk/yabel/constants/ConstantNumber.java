@@ -83,6 +83,8 @@ public class ConstantNumber extends Constant {
     /** {@inheritDoc} */
     @Override
     public boolean equals(Object obj) {
+        if( obj == null ) return false;
+        if( obj == this ) return true;
         if( obj instanceof ConstantNumber ) {
             ConstantNumber other = (ConstantNumber) obj;
             return (other.tag_ == tag_) && other.value_.equals(value_);

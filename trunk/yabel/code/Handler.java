@@ -1,13 +1,13 @@
 package yabel.code;
 
-import yabel.io.IO;
-
-import yabel.constants.ConstantPool;
-import yabel.constants.ConstantUtf8;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import yabel.ClassData;
+import yabel.constants.ConstantClass;
+import yabel.constants.ConstantPool;
+import yabel.io.IO;
 
 /**
  * Exception Handler block
@@ -17,7 +17,7 @@ import java.io.InputStream;
  */
 public class Handler {
     /** Exception type caught */
-    final int catchType_;
+    final ConstantClass catchType_;
 
     /** End processing instruction */
     final int endPC_;
@@ -32,14 +32,44 @@ public class Handler {
     /**
      * New Handler
      * 
+     * @param cp
+     *            the constant pool
+     * @param cd
+     *            class data representation
+     */
+    public Handler(ConstantPool cp, ClassData cd) {
+        startPC_ = cd.getSafe(Integer.class, "startPC").intValue();
+        endPC_ = cd.getSafe(Integer.class, "endPC").intValue();
+        handlerPC_ = cd.getSafe(Integer.class, "handlerPC").intValue();
+
+        String type = cd.get(String.class, "catchType");
+        if( type == null ) {
+            catchType_ = null;
+        } else {
+            catchType_ = new ConstantClass(cp, type);
+        }
+    }
+
+
+    /**
+     * New Handler
+     * 
+     * @param cp
+     *            the constant pool
      * @param input
      *            stream
      */
-    public Handler(InputStream input) throws IOException {
+    public Handler(ConstantPool cp, InputStream input) throws IOException {
         startPC_ = IO.readU2(input);
         endPC_ = IO.readU2(input);
         handlerPC_ = IO.readU2(input);
-        catchType_ = IO.readU2(input);
+        
+        int type = IO.readU2(input);
+        if( type!=0 ) {
+            catchType_ = cp.validate(type, ConstantClass.class);
+        } else {
+            catchType_ = null;
+        }
     }
 
 
@@ -55,7 +85,8 @@ public class Handler {
      * @param catchType
      *            catch type
      */
-    public Handler(int startPC, int endPC, int handlerPC, int catchType) {
+    public Handler(int startPC, int endPC, int handlerPC,
+            ConstantClass catchType) {
         startPC_ = startPC;
         endPC_ = endPC;
         handlerPC_ = handlerPC;
@@ -66,22 +97,9 @@ public class Handler {
     /**
      * Get the name of the catch type of this handler.
      * 
-     * @param cp
-     *            the ConstantPool containing the name of the catch type
      * @return the catch type or null if this is a catch-all.
      */
-    public String getCatchType(ConstantPool cp) {
-        if( catchType_ == 0 ) return null;
-        return cp.validate(catchType_, ConstantUtf8.class).get();
-    }
-
-
-    /**
-     * Get the index of the catch type's identifier, or 0 if this is a catch all
-     * 
-     * @return the type identifier
-     */
-    public int getCatchType() {
+    public ConstantClass getCatchType() {
         return catchType_;
     }
 
@@ -102,6 +120,27 @@ public class Handler {
 
 
     /**
+     * Get a representation of this as ClassData
+     * 
+     * @param cp
+     *            the class's constant pool
+     * @return the representation
+     */
+    public ClassData toClassData(ConstantPool cp) {
+        ClassData cd = new ClassData();
+        cd.put("endPC", Integer.valueOf(endPC_));
+        cd.put("startPC", Integer.valueOf(startPC_));
+        cd.put("handlerPC", Integer.valueOf(handlerPC_));
+        if( catchType_ == null ) {
+            cd.put("catchType", null);
+        } else {
+            cd.put("catchType", catchType_.getClassName().get());
+        }
+        return cd;
+    }
+
+
+    /**
      * Write this handler to the output
      * 
      * @param baos
@@ -111,6 +150,10 @@ public class Handler {
         IO.writeU2(baos, startPC_);
         IO.writeU2(baos, endPC_);
         IO.writeU2(baos, handlerPC_);
-        IO.writeU2(baos, catchType_);
+        if( catchType_ == null ) {
+            IO.writeU2(baos, 0);
+        } else {
+            IO.writeU2(baos, catchType_.getIndex());
+        }
     }
 }
