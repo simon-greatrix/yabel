@@ -8,7 +8,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 
 import yabel.attributes.AttributeList;
 import yabel.constants.ConstantClass;
@@ -112,67 +111,50 @@ public class ClassBuilder {
     /** Version code for Java 1.6 */
     public static final int JAVA_VERSION_1_6 = 0x00000032;
 
-    static {
-        Map<String, Integer> s2i = new HashMap<String, Integer>();
 
-        String s = "abstract";
-        Integer i = Integer.valueOf(ACC_ABSTRACT);
-        s2i.put(s, i);
-
-        s = "final";
-        i = Integer.valueOf(ACC_FINAL);
-        s2i.put(s, i);
-
-        s = "interface";
-        i = Integer.valueOf(ACC_INTERFACE);
-        s2i.put(s, i);
-
-        s = "native";
-        i = Integer.valueOf(ACC_NATIVE);
-        s2i.put(s, i);
-
-        s = "private";
-        i = Integer.valueOf(ACC_PRIVATE);
-        s2i.put(s, i);
-
-        s = "protected";
-        i = Integer.valueOf(ACC_PROTECTED);
-        s2i.put(s, i);
-
-        s = "public";
-        i = Integer.valueOf(ACC_PUBLIC);
-        s2i.put(s, i);
-
-        s = "static";
-        i = Integer.valueOf(ACC_STATIC);
-        s2i.put(s, i);
-
-        s = "strictfp";
-        i = Integer.valueOf(ACC_STRICT);
-        s2i.put(s, i);
-
-        s = "synchronized";
-        i = Integer.valueOf(ACC_SYNCH);
-        s2i.put(s, i);
-
-        s = "transient";
-        i = Integer.valueOf(ACC_TRANSIENT);
-        s2i.put(s, i);
-
-        s = "volatile";
-        i = Integer.valueOf(ACC_VOLATILE);
-        s2i.put(s, i);
-
-        ACC_MASKS = Collections.unmodifiableMap(s2i);
-        for(Entry<String, Integer> e:ACC_MASKS.entrySet()) {
-            int j = 0;
-            int m = e.getValue().intValue();
-            while( (m & 1) == 0 ) {
-                m >>= 1;
-                j++;
-            }
-            ACC_NAMES[j] = e.getKey();
+    /**
+     * Which bit does a value correspond to?
+     * 
+     * @param val
+     *            the value
+     * @return the bit
+     */
+    private static int bit(int val) {
+        int v = val;
+        int b = 1;
+        for(int i = 0;i < 16;i++) {
+            if( b == v ) return i;
+            b <<= 1;
         }
+        throw new IllegalArgumentException(val
+                + " could not be matched to a bit");
+    }
+
+    static {
+        for(int j = 0;j < ACC_NAMES.length;j++) {
+            ACC_NAMES[j] = "(unknown:" + j + ")";
+        }
+        ACC_NAMES[bit(ACC_ABSTRACT)] = "abstract";
+        ACC_NAMES[bit(ACC_FINAL)] = "final";
+        ACC_NAMES[bit(ACC_INTERFACE)] = "interface";
+        ACC_NAMES[bit(ACC_NATIVE)] = "native";
+        ACC_NAMES[bit(ACC_PRIVATE)] = "private";
+        ACC_NAMES[bit(ACC_PROTECTED)] = "protected";
+        ACC_NAMES[bit(ACC_PUBLIC)] = "public";
+        ACC_NAMES[bit(ACC_STATIC)] = "static";
+        ACC_NAMES[bit(ACC_STRICT)] = "strictfp";
+        ACC_NAMES[bit(ACC_SUPER)] = "super";
+        ACC_NAMES[bit(ACC_SYNCH)] = "synchronized";
+        ACC_NAMES[bit(ACC_TRANSIENT)] = "transient";
+        ACC_NAMES[bit(ACC_VOLATILE)] = "volatile";
+
+        Map<String, Integer> s2i = new HashMap<String, Integer>();
+        int k = 1;
+        for(int j = 0;j < ACC_NAMES.length;j++) {
+            s2i.put(ACC_NAMES[j], Integer.valueOf(k));
+            k *= 2;
+        }
+        ACC_MASKS = Collections.unmodifiableMap(s2i);
     }
 
 
@@ -184,9 +166,12 @@ public class ClassBuilder {
      * @return the access representation
      */
     public static String accessCode(int m) {
+        if( m == 0 ) return "";
         StringBuilder buf = new StringBuilder();
         for(int i = 0;i < ACC_NAMES.length;i++) {
-            if( (m & 1) != 0 ) buf.append(' ').append(ACC_NAMES[i]);
+            if( (m & 1) != 0 ) {
+                buf.append(' ').append(ACC_NAMES[i]);
+            }
             m >>= 1;
         }
         return buf.substring(1);
@@ -201,13 +186,16 @@ public class ClassBuilder {
      * @return the bit mask
      */
     public static int accessCode(String s) {
+        s = s.trim();
+        if( s.equals("") ) return 0;
         int i = 0;
         String[] sp = s.split("\\s+");
         for(String l:sp) {
             Integer m = ACC_MASKS.get(l);
             if( m == null )
-                throw new IllegalArgumentException("Unknown access modifier: "
-                        + l);
+                throw new IllegalArgumentException(
+                        "Unknown access modifier: \"" + l + "\" in \"" + s
+                                + "\"");
             i += m.intValue();
         }
         return i;
@@ -329,6 +317,48 @@ public class ClassBuilder {
 
 
     /**
+     * Create a ClassBuilder from its ClassData representation
+     * 
+     * @param data
+     *            the representation
+     */
+    public ClassBuilder(ClassData data) {
+        cp_ = new ConstantPool();
+        version_ = data.get(Integer.class, "version",
+                Integer.valueOf(JAVA_VERSION_1_1)).intValue();
+        access_ = accessCode(data.get(String.class, "access", "")) | ACC_SUPER;
+
+        thisClass_ = new ConstantClass(cp_, data.getSafe(String.class, "name"));
+        superClass_ = new ConstantClass(cp_, data.get(String.class, "super",
+                "Ljava/lang/Object;"));
+
+        List<String> ifaces = data.getList(String.class, "interfaces");
+        if( ifaces != null ) {
+            for(String s:ifaces) {
+                interfaces_.add(new ConstantClass(cp_, s));
+            }
+        }
+
+        List<ClassData> fields = data.getList(ClassData.class, "fields");
+        if( fields != null ) {
+            for(ClassData d:fields) {
+                fields_.add(new Field(cp_, d));
+            }
+        }
+
+        List<ClassData> meths = data.getList(ClassData.class, "methods");
+        if( meths != null ) {
+            for(ClassData d:meths) {
+                methods_.add(new Method(this, d));
+            }
+        }
+
+        attrList_ = new AttributeList(cp_, data.getList(ClassData.class,
+                "attributes"));
+    }
+
+
+    /**
      * New ClassBuilder.
      * 
      * @param input
@@ -401,7 +431,7 @@ public class ClassBuilder {
      *            super class name
      */
     public ClassBuilder(int access, String className, String superName) {
-        access_ = access;
+        access_ = access | ACC_SUPER;
         thisClass_ = new ConstantClass(cp_, className);
         superClass_ = new ConstantClass(cp_, superName);
         attrList_ = new AttributeList();
@@ -455,6 +485,11 @@ public class ClassBuilder {
         Method m = new Method(this, access, name, type);
         methods_.add(m);
         return m;
+    }
+
+
+    public int getAccess() {
+        return access_ & ~ACC_SUPER;
     }
 
 
@@ -540,7 +575,8 @@ public class ClassBuilder {
         int nameId = cp_.getUtf8(name, false);
         int typeId = cp_.getUtf8(type, false);
         for(Method m:methods_) {
-            if( (nameId == m.getName().getIndex()) && (typeId == m.getType().getIndex()) ) return m;
+            if( (nameId == m.getName().getIndex())
+                    && (typeId == m.getType().getIndex()) ) return m;
         }
         return null;
     }
@@ -587,6 +623,46 @@ public class ClassBuilder {
      */
     public void setVersion(int version) {
         version_ = version;
+    }
+
+
+    /**
+     * Convert the class into a ClassData representation.
+     * 
+     * @return the class data representation
+     */
+    public ClassData toClassData() {
+        ClassData cd = new ClassData();
+        cd.put("access", accessCode(access_ & ~ACC_SUPER));
+        cd.put("name", thisClass_.getClassName().get());
+        cd.put("super", superClass_.getClassName().get());
+        cd.put("version", Integer.valueOf(version_));
+
+        // add interfaces
+        List<String> ifaces = new ArrayList<String>(interfaces_.size());
+        for(ConstantClass cc:interfaces_) {
+            ifaces.add(cc.getClassName().get());
+        }
+        cd.putList(String.class, "interfaces", ifaces);
+
+        // add fields
+        List<ClassData> fields = new ArrayList<ClassData>(fields_.size());
+        for(Field f:fields_) {
+            fields.add(f.toClassData());
+        }
+        cd.putList(ClassData.class, "fields", fields);
+
+        // add methods
+        List<ClassData> meths = new ArrayList<ClassData>(methods_.size());
+        for(Method m:methods_) {
+            meths.add(m.toClassData());
+        }
+        cd.putList(ClassData.class, "methods", meths);
+
+        // and the attributes
+        cd.putList(ClassData.class, "attributes", attrList_.toClassData());
+
+        return cd;
     }
 
 

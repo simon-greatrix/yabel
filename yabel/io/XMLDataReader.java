@@ -59,7 +59,7 @@ public class XMLDataReader {
             Node n = value.getFirstChild();
             if( n.isSameNode(value.getLastChild()) ) return n;
         }
-        throw new IllegalArgumentException("Element " + value.getTagName()
+        throw new YabelXMLException("Element " + value.getTagName()
                 + " does not have one child node");
     }
 
@@ -89,10 +89,10 @@ public class XMLDataReader {
             String tagName = entry.getTagName();
             if( !(tagName.equals(type1.getTag()) || tagName.equals(type2.getTag())) ) {
                 if( type1 == type2 )
-                    throw new IllegalArgumentException(parent.getTagName()
+                    throw new YabelXMLException(parent.getTagName()
                             + " contains node with tag " + entry.getTagName()
                             + ". Only " + type1.getTag() + " is allowed.");
-                throw new IllegalArgumentException(parent.getTagName()
+                throw new YabelXMLException(parent.getTagName()
                         + " contains node with tag " + entry.getTagName()
                         + ". Only " + type1.getTag() + " or " + type2.getTag()
                         + " is allowed.");
@@ -119,7 +119,7 @@ public class XMLDataReader {
                 && ((Element) n).getTagName().equals(XMLType.NULL.getTag()) ) {
             return null;
         }
-        throw new IllegalArgumentException("Element " + value.getTagName()
+        throw new YabelXMLException("Element " + value.getTagName()
                 + " contains a " + n);
 
     }
@@ -149,7 +149,7 @@ public class XMLDataReader {
     public static ClassData read(Document doc) {
         Element elem = doc.getDocumentElement();
         if( !elem.getTagName().equals(XMLType.DATA.getTag()) ) {
-            throw new IllegalArgumentException("Root element is not "
+            throw new YabelXMLException("Root element is not "
                     + XMLType.DATA.getTag() + " but " + elem.getTagName());
         }
 

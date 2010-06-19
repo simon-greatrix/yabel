@@ -1,20 +1,32 @@
 package yabel.code;
 
-import yabel.io.IO;
-
-import yabel.attributes.Attribute;
-import yabel.attributes.AttributeList;
-
-import yabel.*;
-import yabel.constants.*;
-import yabel.parser.Decompiler;
-import yabel.parser.ParserAnalyzer;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
-import java.util.Map.Entry;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+
+import yabel.ClassBuilder;
+import yabel.ClassData;
+import yabel.Field;
+import yabel.Method;
+import yabel.OpCodes;
+import yabel.attributes.Attribute;
+import yabel.attributes.AttributeList;
+import yabel.constants.Constant;
+import yabel.constants.ConstantClass;
+import yabel.constants.ConstantFieldRef;
+import yabel.constants.ConstantInterfaceMethodRef;
+import yabel.constants.ConstantMethodRef;
+import yabel.constants.ConstantNumber;
+import yabel.constants.ConstantPool;
+import yabel.constants.ConstantString;
+import yabel.io.IO;
+import yabel.parser.Decompiler;
+import yabel.parser.ParserAnalyzer;
 
 /**
  * A Code attribute for a method. No support for LineNumberTable nor
@@ -29,11 +41,6 @@ public class Code extends Attribute {
 
     /** The characters used to represent escape sequences */
     private final static String ESCAPE_VALS = "btnfr\"'\\";
-
-    /** ICONST instructions in order */
-    static final byte[] ICONST_VALS = new byte[] { OpCodes.ICONST_M1,
-            OpCodes.ICONST_0, OpCodes.ICONST_1, OpCodes.ICONST_2,
-            OpCodes.ICONST_3, OpCodes.ICONST_4, OpCodes.ICONST_5 };
 
 
     /**
@@ -157,8 +164,7 @@ public class Code extends Attribute {
             // third digit
             v = v * 8 + r[2];
             if( v > 0377 ) {
-                throw new IllegalArgumentException("Invalid octal escape in "
-                        + val);
+                throw new YabelParseException("Invalid octal escape in " + val);
             }
 
             // must have char now
@@ -170,7 +176,7 @@ public class Code extends Attribute {
         if( ch == 'u' ) {
             // must have 4 digits
             if( (i + 4) >= val.length() ) {
-                throw new IllegalArgumentException(
+                throw new YabelParseException(
                         "Invalid \\u escape (too few characters) in " + val);
             }
 
@@ -181,8 +187,8 @@ public class Code extends Attribute {
                 ch = v.charAt(j);
                 int v3 = Character.digit(ch, 16);
                 if( v3 == -1 ) {
-                    throw new IllegalArgumentException("Invalid \\u escape ("
-                            + ch + " is not a hex digit) in " + val);
+                    throw new YabelParseException("Invalid \\u escape (" + ch
+                            + " is not a hex digit) in " + val);
                 }
                 v2 = v2 * 16 + v3;
             }
@@ -193,8 +199,8 @@ public class Code extends Attribute {
         }
 
         // unrecognised escape
-        throw new IllegalArgumentException("Unhandled escape sequence in "
-                + val);
+        throw new YabelParseException("Unhandled escape sequence (\\" + ch
+                + ") in " + val);
     }
 
 
@@ -281,6 +287,41 @@ public class Code extends Attribute {
     public Code(ConstantPool cp) {
         super(cp, ATTR_CODE);
         cp_ = cp;
+    }
+
+
+    /**
+     * New Code attribute from class data
+     * 
+     * @param cp
+     *            the constant pool
+     * @param cd
+     *            the class data for this Code attribute
+     */
+    public Code(ConstantPool cp, ClassData cd) {
+        super(cp, cd);
+        cp_ = cp;
+
+        for(ClassData d:cd.getListSafe(ClassData.class, "build")) {
+            String bytes = d.get(String.class, "bytes");
+            if( bytes != null ) {
+                appendCode(IO.decode(bytes));
+            } else {
+                String raw = d.getSafe(String.class, "source");
+                ClassData d2 = d.get(ClassData.class, "replacements");
+                compile(raw, d2);
+            }
+        }
+
+        for(ClassData d:cd.getListSafe(ClassData.class, "handlers")) {
+            addHandler(d);
+        }
+
+        maxLocals_ = cd.getSafe(Integer.class, "maxLocals").intValue();
+        maxStack_ = cd.getSafe(Integer.class, "maxStack").intValue();
+
+        attrList_ = new AttributeList(cp, cd.getListSafe(ClassData.class,
+                "attributes"));
     }
 
 
@@ -379,39 +420,6 @@ public class Code extends Attribute {
 
 
     /**
-     * Write an ALOAD instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void aload(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.ALOAD_0);
-            break;
-        case 1:
-            appendU1(OpCodes.ALOAD_1);
-            break;
-        case 2:
-            appendU1(OpCodes.ALOAD_2);
-            break;
-        case 3:
-            appendU1(OpCodes.ALOAD_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.ALOAD);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.ALOAD);
-                appendU2(i);
-            }
-        }
-    }
-
-
-    /**
      * Append a specific byte sequence to the code being built.
      * 
      * @param code
@@ -426,12 +434,23 @@ public class Code extends Attribute {
 
 
     /**
+     * Append a signed 4 byte value to the code currently being compiled.
+     * 
+     * @param v
+     *            the value to append
+     */
+    void appendS4(int v) {
+        IO.writeS4(pass1_, v);
+    }
+
+
+    /**
      * Append a single byte to the code currently being compiled.
      * 
      * @param b
      *            the byte to append
      */
-    private void appendU1(byte b) {
+    void appendU1(byte b) {
         pass1_.write(b);
     }
 
@@ -442,40 +461,44 @@ public class Code extends Attribute {
      * @param i
      *            the value to append
      */
-    private void appendU2(int i) {
+    void appendU2(int i) {
         IO.writeU2(pass1_, i);
     }
 
 
     /**
-     * Write an ASTORE instruction.
-     * 
-     * @param i
-     *            local variable index
+     * Append the required number of zeros for switch padding. This assumes the
+     * switch op-code has just been written.
      */
-    protected void astore(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.ASTORE_0);
-            break;
-        case 1:
-            appendU1(OpCodes.ASTORE_1);
-            break;
-        case 2:
-            appendU1(OpCodes.ASTORE_2);
-            break;
-        case 3:
-            appendU1(OpCodes.ASTORE_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.ASTORE);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.ASTORE);
-                appendU2(i);
-            }
+    void appendSwitchPadding() {
+        int s = 3 - ((pass1_.size() - 1) % 4);
+        while( s > 0 ) {
+            pass1_.write(0);
+            s--;
+        }
+    }
+
+    /** Map of operand names to their compilers */
+    private static Map<String, CodeOperand> OP_CODES = new HashMap<String, CodeOperand>();
+
+    static {
+        load(CodeArrays.values());
+        load(CodeClass.values());
+        load(CodeConstant.values());
+        load(CodeField.values());
+        load(CodeInterface.values());
+        load(CodeLoadStore.values());
+        load(CodeMethod.values());
+        load(CodeSwitch.values());
+        load(CodeU1U2.values());
+        load(CodeLabel.values());
+        load(new CodeOperand[] { CodeIINC.INSTANCE, CodeLDC.INSTANCE });
+    }
+
+
+    private static final void load(CodeOperand[] ops) {
+        for(CodeOperand op:ops) {
+            OP_CODES.put(op.name().toUpperCase(), op);
         }
     }
 
@@ -672,7 +695,7 @@ public class Code extends Attribute {
 
         ClassData hist = new ClassData();
         hist.put("source", raw);
-        hist.put("replacements", new ClassData(cd));
+        if( cd != null ) hist.put("replacements", new ClassData(cd));
         history_.add(hist);
 
         if( cd == null ) cd = new ClassData();
@@ -688,8 +711,7 @@ public class Code extends Attribute {
                 String tu = toks.get(1).toUpperCase();
                 Byte c = OpCodes.OP_CODES.get(tu);
                 if( c == null ) {
-                    throw new IllegalArgumentException("Unrecognized opcode:"
-                            + toks.get(0));
+                    throw new YabelParseException("Unrecognized opcode:" + tu);
                 }
                 pass1_.write(c.intValue());
                 continue;
@@ -697,306 +719,26 @@ public class Code extends Attribute {
 
             // compile standard productions
             String lbl = toks.get(1).toUpperCase();
-            if( compileClass(lbl, toks, cd) ) continue;
-            if( compileConstant(lbl, toks, cd) ) continue;
-            if( compileField(lbl, toks, cd) ) continue;
-            if( compileInterface(lbl, toks, cd) ) continue;
-            if( compileLabel(lbl, toks) ) continue;
-            if( compileLDC(lbl, toks, cd) ) continue;
-            if( compileLoad(lbl, toks, cd) ) continue;
-            if( compileMethod(lbl, toks, cd) ) continue;
-            if( compileNewArray(lbl, toks, cd) ) continue;
-            if( compileStore(lbl, toks, cd) ) continue;
-            if( compileSwitch(lbl, toks, cd) ) continue;
-            if( compileU1U2(lbl, toks, cd) ) continue;
-
-            throw new IllegalArgumentException("Unrecognized token:"
-                    + toks.get(0));
-        }
-    }
-
-
-    private boolean compileClass(String lbl, List<String> toks, ClassData cd) {
-        boolean ok = false;
-        if( lbl.equals("ANEWARRAY") ) {
-            pass1_.write(OpCodes.ANEWARRAY);
-            ok = true;
-        }
-        if( lbl.equals("CHECKCAST") ) {
-            pass1_.write(OpCodes.CHECKCAST);
-            ok = true;
-        }
-        if( lbl.equals("INSTANCEOF") ) {
-            pass1_.write(OpCodes.INSTANCEOF);
-            ok = true;
-        }
-        if( lbl.equals("NEW") ) {
-            pass1_.write(OpCodes.NEW);
-            ok = true;
-        }
-        if( lbl.equals("CLASS") ) {
-            // CLASS does not have an op-code
-            ok = true;
-        }
-
-        if( !ok ) return false;
-
-        if( toks.size() != 3 )
-            throw new IllegalArgumentException("\"" + lbl
-                    + "\" operation accepts a single parameter.");
-
-        // the class name is a String so it will already be resolved
-        String ref = toks.get(2);
-        int val = getClassRef(ref);
-        IO.writeU2(pass1_, val);
-        return true;
-    }
-
-
-    private boolean compileConstant(String lbl, List<String> toks, ClassData cd) {
-        int cs = -1;
-        if( lbl.equals("ICONST") ) {
-            cs = 0;
-        } else if( lbl.equals("NUMBER") ) {
-            cs = 1;
-        } else if( lbl.equals("CONST") ) {
-            cs = 2;
-        } else if( lbl.equals("STRING") ) {
-            cs = 3;
-        } else if( lbl.equals("INT") ) {
-            cs = 4;
-        } else if( lbl.equals("FLOAT") ) {
-            cs = 5;
-        } else if( lbl.equals("LONG") ) {
-            cs = 6;
-        } else if( lbl.equals("DOUBLE") ) {
-            cs = 7;
-        } else {
-            // not matched
-            return false;
-        }
-
-        // Verify we have the right number of parameters. For most the input
-        // should have been RAW OP-CODE <value> - so size is 3
-        if( (cs != 2) && (toks.size() != 3) )
-            throw new IllegalArgumentException("\"" + lbl
-                    + "\" operation accepts a single parameter. Op-code was:\n"
-                    + toks.get(0));
-
-        // we have a constant, so handle it appropriately
-        switch (cs) {
-        case 0: {
-            // compile integer constant
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            iconst(i);
-            return true;
-        }
-        case 1: {
-            // compile numeric constant
-            String t2 = toks.get(2);
-            String r2 = isReplacement(t2);
-            if( r2==null ) throw new IllegalArgumentException("Parameter to NUMBER constant must be a replacement.");
-            Number n = cd.getSafe(Number.class, r2);
-            int val = getConstantRef(n);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 2: {
-            // compile type-value constant
-            if( toks.size() != 4 )
-                throw new IllegalArgumentException(
-                        "\""
-                                + lbl
-                                + "\" operation accepts either a type and value pair. Op-code was:\n"
-                                + toks.get(0));
-            // replacements already handled
-            int val = getConstantRef(toks.get(0), toks.get(2), toks.get(3));
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 3: {
-            // compile String. Replacements already handled.
-            String k = toks.get(2);
-            int val = getConstantRef(k);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 4: {
-            // int
-            String t2 = toks.get(2);
-            String r2 = isReplacement(t2);
-            Integer n=null;
-            if( r2!=null ) {
-                n = cd.getSafe(Integer.class, r2);
-            } else {
-                try {
-                    n = Integer.valueOf(t2);
-                } catch ( NumberFormatException nfe ) {
-                    throw new IllegalArgumentException("Unable to get integer from \""
-                            + toks.get(0) + "\".");
-                }
+            CodeOperand op = OP_CODES.get(lbl);
+            if( op != null ) {
+                op.compile(this, toks, cd);
+                continue;
             }
-            int val = getConstantRef(n);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 5: {
-            // float
-            String t2 = toks.get(2);
-            String r2 = isReplacement(t2);
-            Float n=null;
-            if( r2!=null ) {
-                n = cd.getSafe(Float.class, r2);
-            } else {
-                try {
-                    n = Float.valueOf(t2);
-                } catch ( NumberFormatException nfe ) {
-                    throw new IllegalArgumentException("Unable to get float from \""
-                            + toks.get(0) + "\".");
-                }
-            }
-            int val = getConstantRef(n);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 6: {
-            // long
-            String t2 = toks.get(2);
-            String r2 = isReplacement(t2);
-            Long n=null;
-            if( r2!=null ) {
-                n = cd.getSafe(Long.class, r2);
-            } else {
-                try {
-                    n = Long.valueOf(t2);
-                } catch ( NumberFormatException nfe ) {
-                    throw new IllegalArgumentException("Unable to get long from \""
-                            + toks.get(0) + "\".");
-                }
-            }
-            int val = getConstantRef(n);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 7: {
-            // double
-            String t2 = toks.get(2);
-            String r2 = isReplacement(t2);
-            Double n=null;
-            if( r2!=null ) {
-                n = cd.getSafe(Double.class, r2);
-            } else {
-                try {
-                    n = Double.valueOf(t2);
-                } catch ( NumberFormatException nfe ) {
-                    throw new IllegalArgumentException("Unable to get double from \""
-                            + toks.get(0) + "\".");
-                }
-            }
-            int val = getConstantRef(n);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        }
 
-        return false;
-    }
-
-
-    private boolean compileField(String lbl, List<String> toks, ClassData cd) {
-        boolean ok = false;
-
-        // generic field reference
-        if( lbl.equals("FIELD") ) {
-            ok = true;
-        }
-
-        // putfield instruction
-        if( lbl.equals("PUTFIELD") ) {
-            pass1_.write(OpCodes.PUTFIELD);
-            ok = true;
-        }
-
-        // getfield instruction
-        if( lbl.equals("GETFIELD") ) {
-            pass1_.write(OpCodes.GETFIELD);
-            ok = true;
-        }
-
-        // putstatic instruction
-        if( lbl.equals("PUTSTATIC") ) {
-            pass1_.write(OpCodes.PUTSTATIC);
-            ok = true;
-        }
-
-        // getstatic instruction
-        if( lbl.equals("GETSTATIC") ) {
-            pass1_.write(OpCodes.GETSTATIC);
-            ok = true;
-        }
-
-        // if got a field ref, output it
-        if( !ok ) return false;
-
-        // is it valid? Local field will just be field name. Remote field
-        // will be class, name, type.
-        int size = toks.size();
-        switch (size) {
-        case 3: {
-            // must be a bare name
-            String k = toks.get(2);
-            int val = getFieldRef(k);
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 5: {
-            // must be class, name, type
-            int val = getFieldRef(toks.get(2), toks.get(3), toks.get(4));
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        default:
-            throw new IllegalArgumentException("\"" + lbl
-                    + "\" operation accepts 1 or 3 parameters.");
+            throw new YabelParseException("Unrecognized opcode:" + toks.get(0));
         }
     }
 
 
-    private boolean compileInterface(String lbl, List<String> toks, ClassData cd) {
-        boolean ok = false;
-        if( lbl.equals("INVOKEINTERFACE") ) {
-            pass1_.write(OpCodes.INVOKEINTERFACE);
-            ok = true;
-        }
-        if( lbl.equals("INTERFACEMETHOD") ) {
-            ok = true;
-        }
-
-        // did we get a match?
-        if( !ok ) return false;
-
-        // ensure we have three elements for the reference
-        if( toks.size() != 5 ) {
-            throw new IllegalArgumentException(
-                    "Invalid interface method reference: " + toks.get(0));
-        }
-
-        // got the method details, write out reference
-        String type = toks.get(4);
-        int val = getInterfaceMethodRef(toks.get(2), toks.get(3), type);
-        IO.writeU2(pass1_, val);
-
-        // INVOKEINTERFACE requires an extra parameter and a zero
-        if( lbl.equals("INVOKEINTERFACE") ) {
-            int nargs = 1 + ClassBuilder.getArgsForType(type);
-            pass1_.write(nargs);
-            pass1_.write(0);
-        }
-        return true;
-    }
-
-
-    private void compileJump(String name, int width) {
+    /**
+     * Add a jump to a named location.
+     * 
+     * @param name
+     *            the location's name
+     * @param width
+     *            the width of the jump (2 or 4 bytes)
+     */
+    protected void compileJump(String name, int width) {
         // get label's list
         Label label = labels_.get(name);
         if( label == null ) {
@@ -1013,504 +755,6 @@ public class Code extends Attribute {
         for(int i = 0;i < width;i++) {
             pass1_.write(0);
         }
-    }
-
-
-    private boolean compileLabel(String lbl, List<String> toks) {
-        if( !(lbl.equals("#") || lbl.equals("#4") || lbl.equals("@")) )
-            return false;
-
-        if( toks.size() != 3 ) {
-            throw new IllegalArgumentException(
-                    "Labels accept only a single argument");
-        }
-
-        String p = toks.get(2);
-
-        if( lbl.equals("#") ) {
-            compileJump(p, 2);
-            return true;
-        }
-
-        if( lbl.equals("#4") ) {
-            compileJump(p, 4);
-            return true;
-        }
-
-        // set label location
-        Label label = getLabel(p);
-        if( label.location_ != -1 ) {
-            throw new IllegalArgumentException("Label " + p
-                    + " defined more than once");
-        }
-        label.location_ = pass1_.size();
-        return true;
-    }
-
-
-    private boolean compileLDC(String lbl, List<String> toks, ClassData cd) {
-        if( !lbl.equals("LDC") ) return false;
-
-        int i = -1;
-        switch (toks.size()) {
-        case 3: {
-            // raw, LDC, property
-            String t2 = toks.get(2);
-            String r2 = isReplacement(t2);
-            Object o = t2;
-            if( r2!=null ) o = cd.get(Object.class,r2,t2);
-            if( o instanceof Number ) {
-                // it is a numeric constant
-                Number n = (Number) o;
-                i = getConstantRef(n);
-            } else if( o instanceof String ) {
-                // it is a String constant
-                String s = (String) o;
-                i = getConstantRef(s);
-            } else if( o instanceof Class<?> ) {
-                // undocumented, but constants can be classes
-                String nm = ((Class<?>) o).getName();
-                nm = nm.replace('.', '/');
-                i = getClassRef(nm);
-            }
-            break;
-        }
-        case 4: {
-            // raw, LDC, type, value
-            String v = toks.get(3);
-            i = getConstantRef(toks.get(0), toks.get(2), v);
-            break;
-        }
-        default: // wrong
-            throw new IllegalArgumentException(
-                    "LDC accepts either a lookup property or a type and value pair. Input was:"
-                            + toks.get(0));
-        }
-
-        // try for a bare int
-        if( i == -1 ) i = getInt(cd, toks.get(2), toks.get(0));
-        ldc(i);
-
-        return true;
-    }
-
-
-    private boolean compileLoad(String l, List<String> toks, ClassData cd) {
-        // object
-        if( l.equals("ALOAD") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            aload(i);
-            return true;
-        }
-
-        // double
-        if( l.equals("DLOAD") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            dload(i);
-            return true;
-        }
-
-        // float
-        if( l.equals("FLOAD") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            fload(i);
-            return true;
-        }
-
-        // int
-        if( l.equals("ILOAD") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            iload(i);
-            return true;
-        }
-
-        // long
-        if( l.equals("LLOAD") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            lload(i);
-            return true;
-        }
-
-        return false;
-    }
-
-
-    private boolean compileMethod(String l, List<String> toks, ClassData cd) {
-        boolean ok = false;
-        if( l.equals("METHOD") ) {
-            ok = true;
-        }
-        if( l.equals("INVOKESPECIAL") ) {
-            pass1_.write(OpCodes.INVOKESPECIAL);
-            ok = true;
-        }
-        if( l.equals("INVOKEVIRTUAL") ) {
-            pass1_.write(OpCodes.INVOKEVIRTUAL);
-            ok = true;
-        }
-        if( l.equals("INVOKESTATIC") ) {
-            pass1_.write(OpCodes.INVOKESTATIC);
-            ok = true;
-        }
-
-        // if we had a match, identify and output method reference
-        if( !ok ) return false;
-
-        // 1 argument - look up in configuration
-        // 2 arguments - local method name and type
-        // 3 arguments - class method and type
-
-        switch (toks.size()) {
-        case 3: {
-            // try for a reference id in the ClassData
-            String p = toks.get(2);
-            int i = getInt(cd, p, toks.get(0));
-            IO.writeU2(pass1_, i);
-
-            return true;
-        }
-        case 4: {
-            int val = getMethodRef(toks.get(2), toks.get(3));
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        case 5: {
-            int val = getMethodRef(toks.get(2), toks.get(3), toks.get(4));
-            IO.writeU2(pass1_, val);
-            return true;
-        }
-        default:
-            throw new IllegalArgumentException("Invalid method reference "
-                    + toks.get(0));
-        }
-    }
-
-
-    private boolean compileNewArray(String l, List<String> toks, ClassData cd) {
-        // NEWARRAY has form NEWARRAY <type indicator>
-        if( l.equals("NEWARRAY") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            pass1_.write(OpCodes.NEWARRAY);
-            String p = toks.get(2);
-            int i = OpCodes.getArrayType(p);
-            if( i != -1 ) {
-                pass1_.write(i);
-                return true;
-            }
-
-            i = getInt(cd, p, toks.get(0));
-            pass1_.write(i);
-            return true;
-        }
-
-        // MULTIANEWARRAY has form MULTIANEWARRAY <class> <dims>
-        if( l.equals("MULTIANEWARRAY") ) {
-            if( toks.size() != 4 )
-                throw new IllegalArgumentException("Operation \"" + l
-                        + "\" accepts two arguments, not " + (toks.size() - 2)
-                        + ". Input was:" + toks.get(0));
-            pass1_.write(OpCodes.MULTIANEWARRAY);
-            IO.writeU2(pass1_, getClassRef(toks.get(2)));
-            IO.writeU1(pass1_, getInt(cd, toks.get(3), toks.get(0)));
-            return true;
-        }
-        return false;
-    }
-
-
-    private boolean compileStore(String lbl, List<String> toks, ClassData cd) {
-        // object
-        if( lbl.equals("ASTORE") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            astore(i);
-            return true;
-        }
-
-        // double
-        if( lbl.equals("DSTORE") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            dstore(i);
-            return true;
-        }
-
-        // float
-        if( lbl.equals("FSTORE") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            fstore(i);
-            return true;
-        }
-
-        // int
-        if( lbl.equals("ISTORE") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            istore(i);
-            return true;
-        }
-
-        // long
-        if( lbl.equals("LSTORE") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            lstore(i);
-            return true;
-        }
-
-        // iinc
-        if( lbl.equals("IINC") ) {
-            int iincIndex, iincConst;
-            int size = toks.size();
-            if( size > 4 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts one or two arguments, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            if( size == 3 ) {
-                List<Integer> ia = cd.getList(Integer.class, toks.get(2));
-                if( (ia == null) || (ia.size() != 2) ) {
-                    // unrecognized
-                    throw new IllegalArgumentException(
-                            "Invalid IINC reference " + toks.get(0) + ":\n"
-                                    + cd);
-                }
-                iincIndex = ia.get(0).intValue();
-                iincConst = ia.get(1).intValue();
-            } else {
-                // size is 4, so have type and value
-                String raw = toks.get(0);
-                iincIndex = getInt(cd, toks.get(2), raw);
-                iincConst = getInt(cd, toks.get(3), raw);
-            }
-
-            // output IINC or WIDE IINC as needed
-            if( (iincIndex < 0x100) && (iincConst < 0x100) ) {
-                appendU1(OpCodes.IINC);
-                appendU1((byte) iincIndex);
-                appendU1((byte) iincConst);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.IINC);
-                appendU2(iincIndex);
-                appendU2(iincConst);
-            }
-            return true;
-        }
-
-        // ret
-        if( lbl.equals("RET") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-
-            if( i < 0x100 ) {
-                appendU1(OpCodes.RET);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.RET);
-                appendU2(i);
-            }
-            return true;
-        }
-
-        return false;
-    }
-
-
-    private boolean compileSwitch(String lbl, List<String> toks, ClassData cd) {
-        if( !(lbl.equals("SWITCH") || lbl.equals("LOOKUPSWITCH") || lbl.equals("TABLESWITCH")) )
-            return false;
-
-        SwitchData vals;
-        if( toks.size() == 3 ) {
-            // named SwitchData
-            String p = toks.get(toks.size() - 1);
-            vals = cd.get(SwitchData.class, p);
-            if( vals == null ) {
-                throw new IllegalArgumentException(
-                        "Property "
-                                + p
-                                + " does not give a list of value to label mappings in:\n"
-                                + cd);
-            }
-        } else {
-            // list of values and labels
-            // raw switch default val1 lbl1 val2 lbl2 ...
-            // so size must be an odd number
-            if( (toks.size() % 2) == 0 ) {
-                throw new IllegalArgumentException(
-                        "Switch statement should be " + lbl
-                                + " <default> [<value> <label>], not "
-                                + toks.get(0));
-            }
-
-            Iterator<String> iter = toks.iterator();
-            // skip raw
-            iter.hasNext();
-            iter.next();
-
-            // skip switch
-            iter.hasNext();
-            iter.next();
-
-            // get default
-            iter.hasNext();
-            vals = new SwitchData(iter.next());
-
-            // read pairs
-            while( iter.hasNext() ) {
-                String value = iter.next();
-                iter.hasNext();
-                String label = iter.next();
-
-                Integer i = Integer.valueOf(value);
-                vals.add(i, label);
-            }
-        }
-
-        if( lbl.equals("SWITCH") ) {
-            // Choose the smallest kind of switch.
-            // Lookup has a value-label pair for each value
-            int lookupSize = 8 * vals.size();
-            // Table has min, max and labels
-            int tableSize = 4 * (1 + vals.getMax() - vals.getMin()) + 8;
-            lbl = (lookupSize < tableSize) ? "LOOKUPSWITCH" : "TABLESWITCH";
-        }
-
-        // how many to skip?
-        // 0 1 2 3 4
-        // switch pad pad pad data
-        // switch pad pad data
-        // switch pad data
-        // switch data
-        int s = 3 - (pass1_.size() % 4);
-
-        if( lbl.equals("TABLESWITCH") ) {
-            pass1_.write(OpCodes.TABLESWITCH);
-            while( s > 0 ) {
-                pass1_.write(0);
-                s--;
-            }
-
-            // default, min, max, all labels
-            String dflt = vals.getDefault();
-            compileJump(dflt, 4);
-
-            int min = vals.getMin();
-            int max = vals.getMax();
-            IO.writeS4(pass1_, min);
-            IO.writeS4(pass1_, max);
-            for(int i = min;i <= max;i++) {
-                Integer ii = Integer.valueOf(i);
-                String slbl = vals.get(ii);
-                if( slbl == null ) {
-                    // no lookup means default
-                    compileJump(dflt, 4);
-                } else {
-                    compileJump(slbl, 4);
-                }
-            }
-            return true;
-        }
-
-        if( lbl.equals("LOOKUPSWITCH") ) {
-            pass1_.write(OpCodes.LOOKUPSWITCH);
-            while( s > 0 ) {
-                pass1_.write(0);
-                s--;
-            }
-            // default, value, label, value, label, ...
-            String dflt = vals.getDefault();
-            compileJump(dflt, 4);
-            IO.writeS4(pass1_, vals.size());
-            for(Entry<Integer, String> e:vals) {
-                IO.writeS4(pass1_, e.getKey().intValue());
-                compileJump(e.getValue(), 4);
-            }
-            return true;
-        }
-
-        return false;
-    }
-
-
-    private boolean compileU1U2(String lbl, List<String> toks, ClassData cd) {
-        // compile explicit U1
-        if( lbl.equals("U1") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            pass1_.write(i);
-            return true;
-        }
-
-        // compile explicit U2
-        if( lbl.equals("U2") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            IO.writeU2(pass1_, i);
-            return true;
-        }
-
-        // compile explicit S4
-        if( lbl.equals("S4") ) {
-            if( toks.size() > 3 )
-                throw new IllegalArgumentException("Operation \"" + lbl
-                        + "\" accepts a single argument, not "
-                        + (toks.size() - 2) + ". Input was:" + toks.get(0));
-            int i = getInt(cd, toks.get(2), toks.get(0));
-            IO.writeS4(pass1_, i);
-            return true;
-        }
-
-        return false;
     }
 
 
@@ -1534,72 +778,6 @@ public class Code extends Attribute {
     }
 
 
-    /**
-     * Write a DLOAD instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void dload(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.DLOAD_0);
-            break;
-        case 1:
-            appendU1(OpCodes.DLOAD_1);
-            break;
-        case 2:
-            appendU1(OpCodes.DLOAD_2);
-            break;
-        case 3:
-            appendU1(OpCodes.DLOAD_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.DLOAD);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.DLOAD);
-                appendU2(i);
-            }
-        }
-    }
-
-
-    /**
-     * Write a DSTORE instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void dstore(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.DSTORE_0);
-            break;
-        case 1:
-            appendU1(OpCodes.DSTORE_1);
-            break;
-        case 2:
-            appendU1(OpCodes.DSTORE_2);
-            break;
-        case 3:
-            appendU1(OpCodes.DSTORE_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.DSTORE);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.DSTORE);
-                appendU2(i);
-            }
-        }
-    }
-
-
     private void finalizeCode() {
         if( code_ != null ) return;
 
@@ -1611,84 +789,21 @@ public class Code extends Attribute {
                 int jump = lbl.location_ - use.opLoc_;
                 int here = use.location_;
                 if( use.width_ == 2 ) {
+                    // verify 2 byte offset is possible
                     if( jump < Short.MIN_VALUE || jump > Short.MAX_VALUE ) {
-                        throw new IllegalArgumentException(
-                                "Cannot jump distance of " + jump);
+                        throw new YabelLabelException(
+                                "Cannot jump distance of " + jump
+                                        + " with 2-byte offset.");
                     }
                     code_[here] = (byte) ((jump >> 8) & 0xff);
                     code_[here + 1] = (byte) (jump & 0xff);
                 } else {
+                    // 4 byte offset
                     code_[here] = (byte) ((jump >> 24) & 0xff);
                     code_[here + 1] = (byte) ((jump >> 16) & 0xff);
                     code_[here + 2] = (byte) ((jump >> 8) & 0xff);
                     code_[here + 3] = (byte) (jump & 0xff);
                 }
-            }
-        }
-    }
-
-
-    /**
-     * Write an FLOAD instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void fload(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.FLOAD_0);
-            break;
-        case 1:
-            appendU1(OpCodes.FLOAD_1);
-            break;
-        case 2:
-            appendU1(OpCodes.FLOAD_2);
-            break;
-        case 3:
-            appendU1(OpCodes.FLOAD_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.FLOAD);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.FLOAD);
-                appendU2(i);
-            }
-        }
-    }
-
-
-    /**
-     * Write a FSTORE instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void fstore(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.FSTORE_0);
-            break;
-        case 1:
-            appendU1(OpCodes.FSTORE_1);
-            break;
-        case 2:
-            appendU1(OpCodes.FSTORE_2);
-            break;
-        case 3:
-            appendU1(OpCodes.FSTORE_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.FSTORE);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.FSTORE);
-                appendU2(i);
             }
         }
     }
@@ -1719,6 +834,18 @@ public class Code extends Attribute {
         byte[] newCode = new byte[code_.length];
         System.arraycopy(code_, 0, newCode, 0, code_.length);
         return newCode;
+    }
+
+
+    /**
+     * Get the Constant for a given reference.
+     * 
+     * @param ref
+     *            the reference
+     * @return the Constant
+     */
+    protected Constant getConstant(int ref) {
+        return cp_.get(ref);
     }
 
 
@@ -1767,8 +894,7 @@ public class Code extends Attribute {
             try {
                 n = Integer.valueOf(value);
             } catch (NumberFormatException nfe) {
-                throw new IllegalArgumentException("Integer constant value \""
-                        + value + "\" is not an integer in:\n" + raw);
+                throw new YabelBadNumberException(raw, value, type);
             }
             i = getConstantRef(n);
         } else if( type.equalsIgnoreCase("double") ) {
@@ -1776,8 +902,7 @@ public class Code extends Attribute {
             try {
                 n = Double.valueOf(value);
             } catch (NumberFormatException nfe) {
-                throw new IllegalArgumentException("Double constant value \""
-                        + value + "\" is not a double in:\n" + raw);
+                throw new YabelBadNumberException(raw, value, type);
             }
             i = getConstantRef(n);
         } else if( type.equalsIgnoreCase("float") ) {
@@ -1785,8 +910,7 @@ public class Code extends Attribute {
             try {
                 n = Float.valueOf(value);
             } catch (NumberFormatException nfe) {
-                throw new IllegalArgumentException("Float constant value \""
-                        + value + "\" is not a float in:\n" + raw);
+                throw new YabelBadNumberException(raw, value, type);
             }
             i = getConstantRef(n);
         } else if( type.equalsIgnoreCase("long") ) {
@@ -1794,8 +918,7 @@ public class Code extends Attribute {
             try {
                 n = Long.valueOf(value);
             } catch (NumberFormatException nfe) {
-                throw new IllegalArgumentException("Long constant value \""
-                        + value + "\" is not a long in:\n" + raw);
+                throw new YabelBadNumberException(raw, value, type);
             }
             i = getConstantRef(n);
         } else if( type.equalsIgnoreCase("string") ) {
@@ -1806,11 +929,11 @@ public class Code extends Attribute {
             i = getClassRef(value);
         } else {
             // unknown type
-            throw new IllegalArgumentException(
+            throw new YabelParseException(
                     "Constant data type \""
                             + type
-                            + "\" was not recognised. Use int, double, float, long or string:\n"
-                            + raw);
+                            + "\" was not recognised. Use int, double, float, long, class or string. Input was \""
+                            + raw + "\"");
         }
 
         return i;
@@ -1827,7 +950,7 @@ public class Code extends Attribute {
     protected int getFieldRef(String name) {
         Field f = class_.getField(name);
         if( f == null )
-            throw new IllegalArgumentException("No such field: " + name);
+            throw new IllegalStateException("Field \"" + name+"\" is not yet defined in this class");
 
         ConstantFieldRef ref = new ConstantFieldRef(cp_, class_.getNameUtf8(),
                 f.getName(), f.getType());
@@ -1871,12 +994,12 @@ public class Code extends Attribute {
      *            the field value
      * @return true if it is a replacement
      */
-    private static String isReplacement(String v) {
-        int l = v.length()-1;
-        if( l<1 ) return null;
+    protected static String isReplacement(String v) {
+        int l = v.length() - 1;
+        if( l < 1 ) return null;
         if( v.charAt(0) != '{' ) return null;
         if( v.charAt(l) != '}' ) return null;
-        return v.substring(1,l);
+        return v.substring(1, l);
     }
 
 
@@ -1891,17 +1014,16 @@ public class Code extends Attribute {
      *            the raw text for the op-code
      * @return the integer
      */
-    private int getInt(ClassData cd, String fld, String raw) {
+    protected static int getInt(ClassData cd, String fld, String raw) {
         String r = isReplacement(fld);
-        if( r!=null ) {
-            Integer i = cd.get(Integer.class, fld);
-            if( i != null ) return i.intValue();
+        if( r != null ) {
+            Integer i = cd.getSafe(Integer.class, r);
+            return i.intValue();
         }
         try {
             return Integer.parseInt(fld);
         } catch (NumberFormatException nfe) {
-            throw new IllegalArgumentException("Unable to get integer from \""
-                    + raw + "\". ClassData was:\n" + cd);
+            throw new YabelBadNumberException(raw, fld, "integer");
         }
     }
 
@@ -1924,6 +1046,22 @@ public class Code extends Attribute {
     }
 
 
+    /**
+     * Define a new label at the current position.
+     * 
+     * @param name
+     *            the label's name
+     */
+    protected void setLabel(String name) {
+        Label label = getLabel(name);
+        if( label.location_ != -1 ) {
+            throw new YabelLabelException("Label \"" + name
+                    + "\" defined more than once");
+        }
+        label.location_ = pass1_.size();
+    }
+
+
     private Label getLabel(String name) {
         Label label = labels_.get(name);
         if( label == null ) {
@@ -1938,12 +1076,12 @@ public class Code extends Attribute {
     private int getLabelLocation(String lbl) {
         Label li = labels_.get(lbl);
         if( li == null )
-            throw new IllegalArgumentException("Label " + lbl
-                    + " is not defined");
+            throw new YabelLabelException("Label \"" + lbl
+                    + "\" is not defined");
         int loc = li.location_;
         if( loc == -1 )
-            throw new IllegalArgumentException("Label " + lbl
-                    + " is not located");
+            throw new YabelLabelException("Label \"" + lbl
+                    + "\" is not located");
         return loc;
     }
 
@@ -1988,195 +1126,6 @@ public class Code extends Attribute {
     protected int getMethodRef(String clss, String name, String type) {
         ConstantMethodRef ref = new ConstantMethodRef(cp_, clss, name, type);
         return ref.getIndex();
-    }
-
-
-    /**
-     * Generate ICONST instruction. May be broadened to BIPUSH, SIPUSH or LDC.
-     * 
-     * @param val
-     *            constant required
-     */
-    protected void iconst(int val) {
-        int ic = val + 1;
-        if( 0 <= ic && ic < ICONST_VALS.length ) {
-            appendU1(ICONST_VALS[ic]);
-            return;
-        }
-
-        if( (Byte.MIN_VALUE <= val) && (val <= Byte.MAX_VALUE) ) {
-            appendU1(OpCodes.BIPUSH);
-            appendU1((byte) val);
-            return;
-        }
-
-        if( (Short.MIN_VALUE <= val) && (val <= Short.MAX_VALUE) ) {
-            appendU1(OpCodes.SIPUSH);
-            appendU2(val);
-            return;
-        }
-
-        ldc(getConstantRef(Integer.valueOf(val)));
-    }
-
-
-    /**
-     * Write an ILOAD instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void iload(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.ILOAD_0);
-            break;
-        case 1:
-            appendU1(OpCodes.ILOAD_1);
-            break;
-        case 2:
-            appendU1(OpCodes.ILOAD_2);
-            break;
-        case 3:
-            appendU1(OpCodes.ILOAD_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.ILOAD);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.ILOAD);
-                appendU2(i);
-            }
-        }
-    }
-
-
-    /**
-     * Write an ISTORE instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void istore(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.ISTORE_0);
-            break;
-        case 1:
-            appendU1(OpCodes.ISTORE_1);
-            break;
-        case 2:
-            appendU1(OpCodes.ISTORE_2);
-            break;
-        case 3:
-            appendU1(OpCodes.ISTORE_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.ISTORE);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.ISTORE);
-                appendU2(i);
-            }
-        }
-    }
-
-
-    /**
-     * Write an LDC or LDC_W instruction
-     * 
-     * @param i
-     *            constant index
-     */
-    protected void ldc(int i) {
-        Constant con = cp_.get(i);
-        if( con instanceof ConstantNumber ) {
-            // longs and doubles must use LDC2_W
-            Number n = ((ConstantNumber) con).getValue();
-            if( (n instanceof Double) || (n instanceof Long) ) {
-                appendU1(OpCodes.LDC2_W);
-                appendU2(i);
-                return;
-            }
-        }
-
-        if( i < 256 ) {
-            appendU1(OpCodes.LDC);
-            appendU1((byte) i);
-        } else {
-            appendU1(OpCodes.LDC_W);
-            appendU2(i);
-        }
-    }
-
-
-    /**
-     * Write an LLOAD instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void lload(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.LLOAD_0);
-            break;
-        case 1:
-            appendU1(OpCodes.LLOAD_1);
-            break;
-        case 2:
-            appendU1(OpCodes.LLOAD_2);
-            break;
-        case 3:
-            appendU1(OpCodes.LLOAD_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.LLOAD);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.LLOAD);
-                appendU2(i);
-            }
-        }
-    }
-
-
-    /**
-     * Write an LSTORE instruction.
-     * 
-     * @param i
-     *            local variable index
-     */
-    protected void lstore(int i) {
-        switch (i) {
-        case 0:
-            appendU1(OpCodes.LSTORE_0);
-            break;
-        case 1:
-            appendU1(OpCodes.LSTORE_1);
-            break;
-        case 2:
-            appendU1(OpCodes.LSTORE_2);
-            break;
-        case 3:
-            appendU1(OpCodes.LSTORE_3);
-            break;
-        default:
-            if( i < 0x100 ) {
-                appendU1(OpCodes.LSTORE);
-                appendU1((byte) i);
-            } else {
-                appendU1(OpCodes.WIDE);
-                appendU1(OpCodes.LSTORE);
-                appendU2(i);
-            }
-        }
     }
 
 
@@ -2248,7 +1197,7 @@ public class Code extends Attribute {
      * @return the representation
      */
     public ClassData toClassData() {
-        ClassData cd = new ClassData();
+        ClassData cd = makeClassData();
         cd.putList(ClassData.class, "build", history_);
         List<ClassData> handlers = new ArrayList<ClassData>(handler_.size());
         for(Handler h:handler_) {

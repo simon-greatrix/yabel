@@ -5,17 +5,28 @@ import yabel.ClassData;
 import java.util.*;
 
 /**
- * Break the source code into a stream of expanded tokens. The source code
- * is initially whitespace delimited. Parameter lists can be supplied by
- * delimiting the parameters and op-code with colons. Text enclosed in
- * braces (e.g. {like} {this}) will be iteratively expanded. Whitespace and
- * colons in parameters must be represented using normal Java escapes (e.g.
- * {like\40this}).
+ * Break the source code into a stream of expanded tokens. The source code is
+ * initially whitespace delimited. Parameter lists can be supplied by delimiting
+ * the parameters and op-code with colons. Text enclosed in braces (e.g. {like}
+ * {this}) will be iteratively expanded. Whitespace and colons in parameters
+ * must be represented using normal Java escapes (e.g. {like\40this}).
  * 
  * @author Simon Greatrix
  * 
  */
 class CodeTokenizer implements Iterator<List<String>> {
+    /** Internal sub-tokenizer state */
+    private enum State {
+        /** No more tokens */
+        FINISHED,
+        
+        /** Has a next token */
+        HAS_NEXT,
+        
+        /** Sub-tokenizer may have more tokens */
+        RETRY
+    }
+
     /** Position in source */
     private int position_ = 0;
 
@@ -90,9 +101,9 @@ class CodeTokenizer implements Iterator<List<String>> {
 
 
     /**
-     * Expand at the top level. At the top level an element may be replaced
-     * by an entire list of strings. Below the top level, only string
-     * replacement occurs.
+     * Expand at the top level. At the top level an element may be replaced by
+     * an entire list of strings. Below the top level, only string replacement
+     * occurs.
      * 
      * @param t
      *            the top level string to expand
@@ -143,19 +154,19 @@ class CodeTokenizer implements Iterator<List<String>> {
 
     /** {@inheritDoc} */
     public boolean hasNext() {
-        Boolean b;
+        State b;
         do {
             b = hasNextInternal();
-        } while( b == null );
-        return b.booleanValue();
+        } while( b == State.RETRY );
+        return (b == State.HAS_NEXT) ? true : false;
     }
 
 
-    private Boolean hasNextInternal() {
+    private State hasNextInternal() {
         while( !subTokenizers_.isEmpty() ) {
             CodeTokenizer ct = subTokenizers_.getFirst();
             boolean hn = ct.hasNext();
-            if( hn ) return Boolean.TRUE;
+            if( hn ) return State.HAS_NEXT;
             subTokenizers_.removeFirst();
         }
 
@@ -168,7 +179,7 @@ class CodeTokenizer implements Iterator<List<String>> {
         }
 
         // if no characters left, no more tokens
-        if( position_ >= src_.length() ) return Boolean.FALSE;
+        if( position_ >= src_.length() ) return State.FINISHED;
 
         // we have the start
         int start = position_;
@@ -193,16 +204,16 @@ class CodeTokenizer implements Iterator<List<String>> {
                     subTokenizers_.add(new CodeTokenizer(el, replacements_));
                 }
 
-                // call back to query sub-tokenizers so return null
-                return null;
+                // call back to query sub-tokenizers so return retry
+                return State.RETRY;
             }
-             
+
             String rs = replacements_.get(String.class, k);
-            if( rs!=null ) {
+            if( rs != null ) {
                 subTokenizers_.add(new CodeTokenizer(rs, replacements_));
 
-                // call back to query sub-tokenizer so return null
-                return null;
+                // call back to query sub-tokenizer so return retry
+                return State.RETRY;
             }
 
             // not expanded
@@ -211,7 +222,7 @@ class CodeTokenizer implements Iterator<List<String>> {
         // expand the top level
         expandTopLevel(raw);
 
-        return Boolean.TRUE;
+        return State.HAS_NEXT;
     }
 
 

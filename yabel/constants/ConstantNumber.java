@@ -42,7 +42,8 @@ public class ConstantNumber extends Constant {
         } else if( value_ instanceof Double ) {
             tag = 6;
         } else {
-            throw new IllegalArgumentException("Number cannot be "
+            // rules out BigDecimal and BigInteger
+            throw new AssertionError("Number cannot be "
                     + value_.getClass());
         }
         tag_ = tag;

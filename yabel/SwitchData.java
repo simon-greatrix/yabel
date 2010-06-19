@@ -48,8 +48,46 @@ public class SwitchData implements Iterable<Entry<Integer, String>> {
         public String getLabel() {
             return label_;
         }
+        
+        
+        /** {@inheritDoc} */
+        @Override
+        public int hashCode() {
+            return label_.hashCode();
+        }
+        
+        
+        /** {@inheritDoc} */
+        @Override
+        public boolean equals(Object other) {
+            if( other==null ) return false;
+            if( other==this ) return true;
+            if( !( other instanceof Case )) return false;
+            Case otherCase = (Case) other;
+            return label_.equals(otherCase.label_) && val_.equals(otherCase.val_);
+        }
     }
 
+    
+    /** {@inheritDoc} */
+    @Override
+    public int hashCode() {
+        return dflt_.hashCode() ^ max_ ^ min_ ^ (data_.size()<<16);
+    }
+    
+    
+    /** {@inheritDoc} */
+    @Override
+    public boolean equals(Object other) {
+        if( other==null ) return false;
+        if( other==this ) return true;
+        if( !( other instanceof SwitchData )) return false;
+        SwitchData otherSwitch = (SwitchData) other;
+        if( ! dflt_.equals(otherSwitch.dflt_) ) return false;
+        if( min_ != otherSwitch.min_ ) return false;
+        if( max_ != otherSwitch.max_ ) return false;
+        return data_.equals(otherSwitch.data_);
+    }
 
     /**
      * Add a case to this switch statement

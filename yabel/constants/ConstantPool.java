@@ -134,7 +134,7 @@ public class ConstantPool {
                 // replacement constant - ensure it is not already assigned
                 Constant c = index_.get(canon.index_);
                 if( (c!=null) && ! c.equals(canon) ) {
-                    throw new IllegalStateException("Cannot reassign constant "+canon.index_+" from "+c+" to "+canon);
+                    throw new AssertionError("Cannot reassign constant "+canon.index_+" from "+c+" to "+canon);
                 }
             }
 
@@ -159,7 +159,7 @@ public class ConstantPool {
      */
     public Constant get(int i) {
         if( (i < 0) || (index_.size() <= i) )
-            throw new IllegalArgumentException(
+            throw new YabelConstantException(
                     "Constant indexes are in the range 0 to "
                             + (index_.size() - 1) + " not " + i);
         Constant c = index_.get(i);
@@ -168,10 +168,10 @@ public class ConstantPool {
             if( i > 0 ) {
                 c = index_.get(i - 1);
                 if( c != null )
-                    throw new IllegalArgumentException("Constant " + i
+                    throw new YabelConstantException("Constant " + i
                             + " is not defined. Previous constant is " + c);
             }
-            throw new IllegalArgumentException("Constant " + i
+            throw new YabelConstantException("Constant " + i
                     + " is not defined");
         }
         return c;
@@ -246,7 +246,7 @@ public class ConstantPool {
     public <T> T validate(int index, Class<T> required) {
         Constant c = get(index);
         if( !required.isAssignableFrom(c.getClass()) ) {
-            throw new IllegalArgumentException("References constant " + c
+            throw new YabelConstantException("References constant " + c
                     + " but required " + required.getName());
         }
         return required.cast(c);

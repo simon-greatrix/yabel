@@ -52,14 +52,14 @@ public enum XMLType {
         public Object read(Element value) {
             String classAttr = value.getAttribute("type");
             if( (classAttr == null) || classAttr.equals("") ) {
-                throw new IllegalArgumentException(
+                throw new YabelXMLException(
                         "LIST tag is missing CLASS attribute");
             }
 
             // get the representation for the class
             XMLType type = XMLType.forTag(classAttr);
             if( type == null ) {
-                throw new IllegalArgumentException(
+                throw new YabelXMLException(
                         "LIST tag TYPE attribute specifies unrepresented type:"
                                 + classAttr);
             }
@@ -222,12 +222,12 @@ public enum XMLType {
         public Object read(Element entry) {
             String k = entry.getAttribute("key");
             if( k == null || k.equals("") )
-                throw new IllegalArgumentException("Entry has no key");
+                throw new YabelXMLException("Entry has no key");
 
             // find first child element of entry, which will be the value
             Node n = XMLDataReader.checkHasOneChild(entry);
             if( !(n instanceof Element) ) {
-                throw new IllegalArgumentException("Element "
+                throw new YabelXMLException("Element "
                         + entry.getTagName() + " does not contain a value");
             }
 
@@ -235,7 +235,7 @@ public enum XMLType {
             Element value = (Element) n;
             XMLType xt = XMLType.forTag(value.getTagName());
             if( xt == null )
-                throw new IllegalArgumentException(
+                throw new YabelXMLException(
                         "Unknown child for <entry>: " + value.getTagName());
 
             // process value
@@ -312,10 +312,10 @@ public enum XMLType {
         public Object read(Element entry) {
             String sv = entry.getAttribute("value");
             if( sv == null || sv.equals("") )
-                throw new IllegalArgumentException("Case has no value");
+                throw new YabelXMLException("<case> has no value attribute");
             String sl = entry.getAttribute("label");
             if( sl == null || sl.equals("") )
-                throw new IllegalArgumentException("Case has no label");
+                throw new YabelXMLException("<case> has no label attribute");
 
             return new Case(Integer.valueOf(sv), sl);
         }
@@ -336,7 +336,7 @@ public enum XMLType {
         public Object read(Element entry) {
             String sv = entry.getAttribute("default");
             if( sv == null || sv.equals("") )
-                throw new IllegalArgumentException("Case has no value");
+                throw new YabelXMLException("<switch> has no default attribute");
             SwitchData sw = new SwitchData(sv);
             List<Element> children = XMLDataReader.getChildElements(entry,
                     CASE, CASE);
@@ -420,7 +420,7 @@ public enum XMLType {
         if( cl == null ) return NULL;
         XMLType t = TYPE_4_CLASS.get(cl);
         if( t == null )
-            throw new IllegalArgumentException("Class " + cl.getName()
+            throw new YabelXMLException("Class " + cl.getName()
                     + " cannot be represented through an XML entry");
         return t;
     }
