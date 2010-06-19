@@ -51,6 +51,23 @@ public class AttributeList {
 
 
     /**
+     * Read an attribute list
+     * 
+     * @param cp
+     *            the constant pool
+     * @param data
+     *            list of class data defining the attributes
+     */
+    public AttributeList(ConstantPool cp, List<ClassData> data) {
+        if( data!=null ) {
+            for(ClassData cd : data) {
+                attrs_.add(read(cp,cd));
+            }
+        }
+    }
+
+
+    /**
      * Get a named attribute from this list.
      * 
      * @param cp
@@ -65,6 +82,37 @@ public class AttributeList {
             if( a.getAttrId().getIndex() == index ) return a;
         }
         return null;
+    }
+
+
+    /**
+     * Read an attribute from class data
+     * 
+     * @param cp
+     *            the constant pool associated with this list
+     * @param input
+     *            the class data
+     * @return resolved attribute
+     */
+    protected Attribute read(ConstantPool cp, ClassData input) {
+        String idName = input.getSafe(String.class,"name");
+
+        if( idName.equals(Attribute.ATTR_CODE) ) return new Code(cp, input);
+        if( idName.equals(Attribute.ATTR_CONSTANT_VALUE) )
+            return new ConstantValue(cp, input);
+        if( idName.equals(Attribute.ATTR_EXCEPTIONS) )
+            return new Exceptions(cp, input);
+        // TODO if( idName.equals(ATTR_INNER_CLASSES) )
+        if( idName.equals(Attribute.ATTR_SYNTHETIC) )
+            return new MarkerAttribute(cp, input);
+        if( idName.equals(Attribute.ATTR_SOURCE_FILE) )
+            return new SourceFileAttribute(cp, input);
+        // TODO if( idName.equals(ATTR_LINE_NUMBER_TABLE) )
+        // TODO if( idName.equals(ATTR_LOCAL_VARIABLE_TABLE) )
+        if( idName.equals(Attribute.ATTR_DEPRECATED) )
+            return new MarkerAttribute(cp, input);
+
+        return new GenericAttribute(cp, input);
     }
 
 

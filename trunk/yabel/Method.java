@@ -41,6 +41,26 @@ public class Method implements AttributeListListener {
 
 
     /**
+     * Create a method from ClassData
+     * 
+     * @param classBuilder
+     *            the class the method will be a part of
+     * @param data
+     *            the description of this method
+     */
+    Method(ClassBuilder classBuilder, ClassData data) {
+        classBuilder_ = classBuilder;
+        cp_ = classBuilder_.getConstantPool();
+        access_ = ClassBuilder.accessCode(data.get(String.class, "access",""));
+        name_ = new ConstantUtf8(cp_, data.getSafe(String.class, "name"));
+        type_ = new ConstantUtf8(cp_, data.getSafe(String.class, "type"));
+        attrList_ = new AttributeList(cp_, data.getList(ClassData.class,
+                "attributes"));
+        attrList_.setOwner(this);
+    }
+
+
+    /**
      * Read a method from the input.
      * 
      * @param input
@@ -197,7 +217,7 @@ public class Method implements AttributeListListener {
         ClassData cd = new ClassData();
         cd.put("access", ClassBuilder.accessCode(access_));
         cd.put("name", name_.get());
-        cd.put("type", name_.get());
+        cd.put("type", type_.get());
         cd.putList(ClassData.class, "attributes", attrList_.toClassData());
         return cd;
     }

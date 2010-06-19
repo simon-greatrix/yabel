@@ -489,7 +489,7 @@ public class ParserAnalyzer implements ParserListener {
             // is this a branch? if so it ends the block
             if( opc.branchTo_.length != 0 ) {
                 // record all branch destinations in the block. Note that
-                // op-codes use offets and blocks use addresses.
+                // op-codes use offsets and blocks use addresses.
                 block.branchTo_ = new Integer[opc.branchTo_.length];
                 for(int i = 0;i < opc.branchTo_.length;i++) {
                     block.branchTo_[i] = Integer.valueOf(p + opc.branchTo_[i]);
@@ -575,7 +575,7 @@ public class ParserAnalyzer implements ParserListener {
             // cannot detect a loop exit condition so the stack will grow
             // without limit.
             if( crumbs.contains(location) )
-                throw new IllegalStateException(
+                throw new YabelDecompileException(
                         "Stack growth in loop detected. Start of loop at "
                                 + location);
         }
@@ -589,18 +589,18 @@ public class ParserAnalyzer implements ParserListener {
 
         // stack should never go negative
         if( stack < 0 )
-            throw new IllegalStateException(
+            throw new YabelDecompileException(
                     "Stack exhausted at or after location " + location);
 
         // Class files cannot handle a stack size over 0xffff
         if( stack > 0xffff )
-            throw new IllegalStateException(
+            throw new YabelDecompileException(
                     "Stack overflowed 65535 at or after location " + location);
 
         // if this block ends in a RET, return to where we last JSRed from
         if( block.exitViaRET_ ) {
             if( jsrs.isEmpty() )
-                throw new IllegalStateException(
+                throw new YabelDecompileException(
                         "Encountered RET with no previous JSR. RET is on or after byte "
                                 + location);
             Integer next = jsrs.pop();

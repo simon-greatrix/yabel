@@ -76,9 +76,9 @@ public class ConstantValue extends Attribute {
             value_ = new ConstantNumber(cp, (Number) v);
         } else if( v instanceof String ) {
             value_ = new ConstantString(cp, (String) v);
-        }
-        throw new IllegalArgumentException(
-                "ConstantValue cannot hold a value of class " + v.getClass());
+        } else
+            throw new IllegalArgumentException(
+                "ConstantValue must be String or Number, not class " + v.getClass());
     }
 
 
@@ -135,7 +135,7 @@ public class ConstantValue extends Attribute {
         super(cp, Attribute.ATTR_CONSTANT_VALUE);
         int len = IO.readS4(input);
         if( len != 2 )
-            throw new IllegalArgumentException(
+            throw new IOException(
                     "Length of ConstantValue attribute is " + len + " not 2");
         int val = IO.readU2(input);
         value_ = cp.get(val);

@@ -1,17 +1,22 @@
 package yabel.parser;
 
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import yabel.ClassData;
 import yabel.OpCodes;
 import yabel.SwitchData;
 import yabel.code.Code;
 import yabel.code.Handler;
-import yabel.constants.*;
+import yabel.constants.Constant;
+import yabel.constants.ConstantClass;
+import yabel.constants.ConstantNumber;
+import yabel.constants.ConstantPool;
+import yabel.constants.ConstantRef;
+import yabel.constants.ConstantString;
 import yabel.io.IO;
-
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 /**
  * Decompile byte code and produce a compilable output that can be used to
@@ -174,7 +179,7 @@ public class Decompiler implements ParserListener {
             return "LDC:class:{" + nm + "}";
         } else {
             // other types not handled
-            throw new IllegalArgumentException(
+            throw new YabelDecompileException(
                     "Constant for LDC is not a string nor a number: " + con);
         }
         return "LDC:{" + nm + "}";
@@ -280,8 +285,8 @@ public class Decompiler implements ParserListener {
             return;
         }
         default:
-            throw new IllegalArgumentException("opCode is " + buffer[0]
-                    + ", length is " + length);
+            throw new AssertionError("opCode is " + buffer[0] + ", length is "
+                    + length);
         }
     }
 
@@ -311,8 +316,8 @@ public class Decompiler implements ParserListener {
             return;
         }
         default:
-            throw new IllegalArgumentException("opCode is " + buffer[0]
-                    + ", length is " + length);
+            throw new AssertionError("opCode is " + buffer[0] + ", length is "
+                    + length);
         }
     }
 
@@ -327,8 +332,8 @@ public class Decompiler implements ParserListener {
             return;
         }
 
-        throw new IllegalArgumentException("opCode is " + buffer[0]
-                + ", length is " + length);
+        throw new AssertionError("opCode is " + buffer[0] + ", length is "
+                + length);
     }
 
 
@@ -492,8 +497,8 @@ public class Decompiler implements ParserListener {
             return;
         }
 
-        throw new IllegalArgumentException("opCode is " + buffer[0]
-                + ", length is " + length);
+        throw new AssertionError("opCode is " + buffer[0] + ", length is "
+                + length);
     }
 
 

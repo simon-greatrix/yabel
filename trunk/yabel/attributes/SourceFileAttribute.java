@@ -48,7 +48,7 @@ public class SourceFileAttribute extends Attribute {
         super(cp, Attribute.ATTR_SOURCE_FILE);
         int len = IO.readS4(input);
         if( len != 2 )
-            throw new IllegalArgumentException(
+            throw new IOException(
                     "SourceFile attribute has length " + len + " not 2");
         int val = IO.readU2(input);
         source_ = cp.validate(val, ConstantUtf8.class);

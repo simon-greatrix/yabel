@@ -106,6 +106,25 @@ public class ClassData extends LinkedHashMap<String, Object> {
         public Class<T> getType() {
             return clss_;
         }
+
+
+        /** {@inheritDoc} */
+        @Override
+        public int hashCode() {
+            return list_.hashCode();
+        }
+
+
+        /** {@inheritDoc} */
+        @Override
+        public boolean equals(Object other) {
+            if( other == null ) return false;
+            if( other == this ) return true;
+            if( !(other instanceof TypedList<?>) ) return false;
+            TypedList<?> otherList = (TypedList<?>) other;
+
+            return list_.equals(otherList.list_);
+        }
     }
 
     /** serial version UID */
@@ -243,7 +262,7 @@ public class ClassData extends LinkedHashMap<String, Object> {
     @Override
     public Object put(String key, Object value) {
         if( (value != null) && (value instanceof List<?>) ) {
-            throw new Error("Lists must be put into the map using put List");
+            throw new AssertionError("Lists must be put into the map using putList(Class,String,List)");
         }
         return putInternal(key, value);
     }
@@ -251,13 +270,13 @@ public class ClassData extends LinkedHashMap<String, Object> {
 
     private Object putInternal(String key, Object value) {
         if( key == null || key.equals("") )
-            throw new IllegalArgumentException(
+            throw new AssertionError(
                     "Key must be specified and not empty");
         if( value != null ) {
             if( !((value instanceof String) || (value instanceof Number)
                     || (value instanceof SwitchData)
                     || (value instanceof ClassData) || (value instanceof TypedList<?>)) ) {
-                throw new IllegalArgumentException("Unhandled class "
+                throw new AssertionError("Unhandled class "
                         + value.getClass() + " for key " + key);
             }
         }

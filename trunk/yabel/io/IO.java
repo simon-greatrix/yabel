@@ -48,7 +48,7 @@ public class IO {
         // we should have an exact multiple of 4 characters
         int len = text.length();
         if( (len & 0x3) != 0 )
-            throw new IllegalArgumentException(
+            throw new YabelXMLException(
                     "Input text is not Base64 encoded (wrong length): " + text);
 
         if( len == 0 ) return new byte[0];
@@ -155,10 +155,13 @@ public class IO {
 
         byte b = (byte) -1;
         if( c < 127 ) b = BASE64BLOCKS[c];
-        if( b == -1 )
-            throw new IllegalArgumentException("Character 0x"
+        if( b == -1 ) {
+            // don't print out control codes, they could mess things up
+            if( Character.isISOControl(c)) c=' ';
+            throw new YabelXMLException("Character '"+c+"' (0x"
                     + Integer.toHexString(c)
-                    + " is not a valid Base64 character");
+                    + ") is not a valid Base64 character");
+        }
         return b;
     }
 

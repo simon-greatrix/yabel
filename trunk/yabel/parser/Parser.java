@@ -334,7 +334,7 @@ public class Parser {
                             : SwitchState.PAD;
                     break;
                 default:
-                    throw new IllegalArgumentException("Op-code " + b + " ("
+                    throw new YabelDecompileException("Op-code " + b + " ("
                             + Integer.toHexString(b) + ") was not recognised");
                 }
             }
@@ -356,7 +356,7 @@ public class Parser {
             // read a WIDE op-code
             bytesLeft_ = 2 * Parser.NUM_BYTES[b];
             if( bytesLeft_ <= 0 )
-                throw new IllegalArgumentException("Op-code " + b + " ("
+                throw new YabelDecompileException("Op-code " + b + " ("
                         + Integer.toHexString(b) + " cannot follow WIDE");
             if( isDebug_ ) {
                 String s = OpCodes.getOpName(b);
@@ -452,7 +452,7 @@ public class Parser {
             break;
         case MAX:
         case MIN:
-            throw new IllegalStateException("Encountered state "+switchState_+" when parsing LOOKUPSWITCH");
+            throw new AssertionError("Encountered state "+switchState_+" when parsing LOOKUPSWITCH");
         }
     }
 
@@ -529,7 +529,7 @@ public class Parser {
             }
             break;
         case NPAIRS:
-            throw new IllegalStateException("Encountered state "+switchState_+" when parsing TABLESWITCH");
+            throw new AssertionError("Encountered state "+switchState_+" when parsing TABLESWITCH");
         }
     }
 }

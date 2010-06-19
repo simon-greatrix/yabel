@@ -69,12 +69,12 @@ public class Exceptions extends Attribute {
         cp_ = cp;
         int len = IO.readS4(input);
         if( (len < 2) || (len % 2 != 0) )
-            throw new IllegalArgumentException(
+            throw new IOException(
                     "Exceptions attribute has length " + len
                             + ". Should be at least 2 and even.");
         int len2 = IO.readU2(input);
         if( (len2 * 2 + 2) != len )
-            throw new IllegalArgumentException("Exception attribute of length "
+            throw new IOException("Exception attribute of length "
                     + len + " has " + len2 + " exceptions.");
         for(int i = 0;i < len2;i++) {
             int c = IO.readU2(input);

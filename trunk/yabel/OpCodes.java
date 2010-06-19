@@ -1,5 +1,6 @@
 package yabel;
 
+import java.lang.reflect.Modifier;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -587,35 +588,6 @@ public class OpCodes {
     /** Map of op-code name to op-code byte */
     public static final Map<String, Byte> OP_CODES;
 
-
-    /**
-     * Get the Op-Code name for a given byte. Will return "&lt;unknown&gt;" if
-     * the code is not recognised.
-     * 
-     * @param b
-     *            the byte
-     * @return the name
-     */
-    public static String getOpName(byte b) {
-        return getOpName(b & 0xff);
-    }
-
-
-    /**
-     * Get the Op-Code name for a given byte. Will return "&lt;unknown&gt;" if
-     * the code is not recognised.
-     * 
-     * @param i
-     *            the byte
-     * @return the name
-     */
-    public static String getOpName(int i) {
-        String r = null;
-        if( 0 <= i && i < OP_NAMES.length ) r = OP_NAMES[i];
-        return (r == null) ? "<unknown>" : r;
-
-    }
-
     /**
      * Names of all op codes
      */
@@ -696,6 +668,52 @@ public class OpCodes {
             m.put(OP_NAMES[i], Byte.valueOf((byte) i));
         }
         OP_CODES = Collections.unmodifiableMap(m);
+
+        // also verify the values are consistent
+
+        // first check the public final static constants have entries in
+        // the OP_CODES map
+        int access = Modifier.PUBLIC | Modifier.FINAL | Modifier.STATIC;
+        java.lang.reflect.Field[] fs = OpCodes.class.getDeclaredFields();
+        for(java.lang.reflect.Field f:fs) {
+            if( !f.getType().equals(Byte.TYPE) ) continue;
+            if( f.getModifiers() != access ) continue;
+            try {
+                byte consVal = f.getByte(null);
+                String name = f.getName();
+                Byte opVal = OP_CODES.get(name);
+                if( opVal == null ) {
+                    System.err.println("WARNING: Constant " + name
+                            + " has no entry in OP_CODES");
+                    continue;
+                }
+                if( opVal.byteValue() != consVal ) {
+                    System.err.println("WARNING: Constant " + name
+                            + " is mapped to " + opVal + " and " + consVal);
+                    continue;
+                }
+            } catch (IllegalAccessException iae) {
+                continue;
+            }
+        }
+        
+        // check all OP_NAMES have declared constants
+        for(String s : OP_NAMES) {
+            if( s.equals("") ) continue;
+            try {
+                java.lang.reflect.Field f = OpCodes.class.getDeclaredField(s);
+                if( f.getModifiers() != access ) {
+                    System.err.println("WARNING: Constant "+f.getName()+" does not map to a public static final field");
+                }
+                if( ! f.getType().equals(Byte.TYPE) ) {
+                    System.err.println("WARNING: Constant "+f.getName()+" does not map to a byte constant");
+                }
+            } catch (SecurityException e) {
+                continue;
+            } catch (NoSuchFieldException e) {
+                System.err.println("OpCode "+s+" has no constant defined");
+            }
+        }
     }
 
 
@@ -723,5 +741,48 @@ public class OpCodes {
             if( type.equalsIgnoreCase(ARRAY_TYPES[i]) ) return i;
         }
         return -1;
+    }
+
+
+    /**
+     * Get the Op-Code byte for a given name. Will return 0xff if the code is
+     * not recognised.
+     * 
+     * @param op
+     *            the name
+     * @return the byte
+     */
+    public static byte getOpCode(String op) {
+        Byte b = OP_CODES.get(op);
+        return (b == null) ? ((byte) 0xff) : b.byteValue();
+    }
+
+
+    /**
+     * Get the Op-Code name for a given byte. Will return "&lt;unknown&gt;" if
+     * the code is not recognised.
+     * 
+     * @param b
+     *            the byte
+     * @return the name
+     */
+    public static String getOpName(byte b) {
+        return getOpName(b & 0xff);
+    }
+
+
+    /**
+     * Get the Op-Code name for a given byte. Will return "&lt;unknown&gt;" if
+     * the code is not recognised.
+     * 
+     * @param i
+     *            the byte
+     * @return the name
+     */
+    public static String getOpName(int i) {
+        String r = null;
+        if( 0 <= i && i < OP_NAMES.length ) r = OP_NAMES[i];
+        return (r == null) ? "<unknown>" : r;
+
     }
 }

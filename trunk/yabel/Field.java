@@ -48,6 +48,23 @@ public class Field {
 
 
     /**
+     * New field from a field description
+     * 
+     * @param cp
+     *            the constant pool
+     * @param data
+     *            the description of the field
+     */
+    Field(ConstantPool cp, ClassData data) {
+        access_ = ClassBuilder.accessCode(data.get(String.class, "access", ""));
+        name_ = new ConstantUtf8(cp, data.getSafe(String.class, "name"));
+        type_ = new ConstantUtf8(cp, data.getSafe(String.class, "type"));
+        attrList_ = new AttributeList(cp, data.getList(ClassData.class,
+                "attributes"));
+    }
+
+
+    /**
      * New field.
      * 
      * @param cp
@@ -139,7 +156,7 @@ public class Field {
         ClassData cd = new ClassData();
         cd.put("access", ClassBuilder.accessCode(access_));
         cd.put("name", name_.get());
-        cd.put("type", name_.get());
+        cd.put("type", type_.get());
         cd.putList(ClassData.class, "attributes", attrList_.toClassData());
         return cd;
     }

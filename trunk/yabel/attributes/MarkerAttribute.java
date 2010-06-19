@@ -60,7 +60,7 @@ public class MarkerAttribute extends Attribute {
         super(cp,idName);
         int len = IO.readS4(input);
         if( len != 0 )
-            throw new IllegalArgumentException("Marker attribute " + idName
+            throw new IOException("Marker attribute " + idName
                     + " length is not zero but " + len);
     }
 
