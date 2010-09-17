@@ -1,15 +1,13 @@
 package yabel.constants;
 
-
 import yabel.io.IO;
-
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * A numberical constant. May be integer, float, double, or long.
+ * A numerical constant. May be integer, float, double, or long.
  * 
  * @author Simon Greatrix
  * 
@@ -43,11 +41,30 @@ public class ConstantNumber extends Constant {
             tag = 6;
         } else {
             // rules out BigDecimal and BigInteger
-            throw new AssertionError("Number cannot be "
-                    + value_.getClass());
+            throw new AssertionError("Number cannot be " + value_.getClass());
         }
         tag_ = tag;
         canonicalize(cp);
+    }
+
+
+    /**
+     * Get the type of the number this constant represents
+     * 
+     * @return the type
+     */
+    public String getType() {
+        switch (tag_) {
+        case 3:
+            return "int";
+        case 4:
+            return "float";
+        case 5:
+            return "long";
+        case 6:
+            return "double";
+        }
+        throw new IllegalStateException("Tag " + tag_ + " is not matched");
     }
 
 

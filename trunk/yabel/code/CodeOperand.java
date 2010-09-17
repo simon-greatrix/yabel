@@ -29,5 +29,5 @@ public interface CodeOperand {
      * @param cd
      *            the ClassData associated with this compilation
      */
-    public void compile(Code code, List<String> toks, ClassData cd);
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd);
 }

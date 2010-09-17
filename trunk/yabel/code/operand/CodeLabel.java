@@ -1,8 +1,11 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
 import yabel.ClassData;
+import yabel.code.CodeOperand;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Compile label related operations
@@ -22,7 +25,7 @@ abstract public class CodeLabel implements CodeOperand {
 
     /** Two byte offset value */
     final static CodeLabel HASH = new CodeLabel() {
-        protected void compile(Code code, String label) {
+        protected void compile(CompilerOutput code, String label) {
             code.compileJump(label, 2);
         }
 
@@ -34,7 +37,7 @@ abstract public class CodeLabel implements CodeOperand {
 
     /** Four byte offset value */
     final static CodeLabel HASH4 = new CodeLabel() {
-        protected void compile(Code code, String label) {
+        protected void compile(CompilerOutput code, String label) {
             code.compileJump(label, 4);
         }
 
@@ -46,7 +49,7 @@ abstract public class CodeLabel implements CodeOperand {
 
     /** Place label */
     final static CodeLabel AT = new CodeLabel() {
-        protected void compile(Code code, String label) {
+        protected void compile(CompilerOutput code, String label) {
             code.setLabel(label);
         }
 
@@ -59,7 +62,7 @@ abstract public class CodeLabel implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks, ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         if( toks.size() != 3 ) {
             throw new YabelWrongTokenCountException(toks, 1, "label name");
         }
@@ -76,5 +79,5 @@ abstract public class CodeLabel implements CodeOperand {
      * @param label
      *            the label's name
      */
-    abstract protected void compile(Code code, String label);
+    abstract protected void compile(CompilerOutput code, String label);
 }

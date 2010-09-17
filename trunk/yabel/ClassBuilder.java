@@ -91,7 +91,7 @@ public class ClassBuilder {
      * 
      * @internal
      */
-    public static boolean DEBUG = false;
+    public static boolean DEBUG = true;
 
     /** Version code for Java 1.1 */
     public static final int JAVA_VERSION_1_1 = 0x0003002d;
@@ -202,92 +202,6 @@ public class ClassBuilder {
     }
 
 
-    /**
-     * How many arguments are needed on the stack for a method? Longs and
-     * doubles count as 2 as they take two stack slots.
-     * 
-     * @param type
-     *            the method type
-     * @return the number of arguments
-     */
-    public static int getArgsForType(String type) {
-        if( !type.startsWith("(") )
-            throw new IllegalArgumentException("No starting '(' : " + type);
-        int p = type.lastIndexOf(')');
-        if( p == -1 )
-            throw new IllegalArgumentException("No closing ')' : " + type);
-        type = type.substring(1, p);
-        int count = 0;
-        boolean isArray = false;
-        for(int i = 0;i < type.length();i++) {
-            char c = type.charAt(i);
-            switch (c) {
-            case 'Z': // boolean
-                count++;
-                break;
-            case 'B': // byte
-                count++;
-                break;
-            case 'C': // char
-                count++;
-                break;
-            case 'D': // double
-                count += isArray ? 1 : 2;
-                break;
-            case 'F': // float
-                count++;
-                break;
-            case 'I': // int;
-                count++;
-                break;
-            case 'J': // long
-                count += isArray ? 1 : 2;
-                break;
-            case 'S': // short
-                count++;
-                break;
-            case 'L': // object
-                count++;
-                p = type.indexOf(';', i);
-                if( p == -1 )
-                    throw new IllegalArgumentException(
-                            "No closing ';' to object name at position " + i
-                                    + " : " + type);
-                i = p;
-                break;
-            case '[': // array
-                isArray = true;
-                break;
-            }
-            if( c != '[' ) isArray = false;
-        }
-
-        return count;
-    }
-
-
-    /**
-     * Get the internal name of a class
-     * 
-     * @param cls
-     *            the class
-     * @return the internal name
-     */
-    public static String getTypeName(Class<?> cls) {
-        if( cls.equals(Byte.TYPE) ) return "B";
-        if( cls.equals(Character.TYPE) ) return "C";
-        if( cls.equals(Double.TYPE) ) return "D";
-        if( cls.equals(Float.TYPE) ) return "F";
-        if( cls.equals(Integer.TYPE) ) return "I";
-        if( cls.equals(Long.TYPE) ) return "J";
-        if( cls.equals(Short.TYPE) ) return "S";
-        if( cls.isArray() ) return cls.getName();
-
-        String nm = cls.getName();
-        nm = nm.replace('.', '/');
-        return "L" + nm + ";";
-    }
-
     /** Class access modifier */
     private int access_;
 
@@ -295,7 +209,7 @@ public class ClassBuilder {
     private final AttributeList attrList_;
 
     /** Constant pool for this class */
-    private ConstantPool cp_ = new ConstantPool();
+    private final ConstantPool cp_;
 
     /** Fields for this class */
     private List<Field> fields_ = new ArrayList<Field>();
@@ -323,7 +237,7 @@ public class ClassBuilder {
      *            the representation
      */
     public ClassBuilder(ClassData data) {
-        cp_ = new ConstantPool();
+        cp_ = new ConstantPool(this);
         version_ = data.get(Integer.class, "version",
                 Integer.valueOf(JAVA_VERSION_1_1)).intValue();
         access_ = accessCode(data.get(String.class, "access", "")) | ACC_SUPER;
@@ -369,7 +283,7 @@ public class ClassBuilder {
         if( magic != 0xcafebabe )
             throw new IOException("CAFEBABE header bytes missing");
         version_ = IO.readS4(input);
-        cp_ = new ConstantPool(input);
+        cp_ = new ConstantPool(this,input);
 
         access_ = IO.readU2(input);
 
@@ -432,6 +346,7 @@ public class ClassBuilder {
      */
     public ClassBuilder(int access, String className, String superName) {
         access_ = access | ACC_SUPER;
+        cp_ = new ConstantPool(this);
         thisClass_ = new ConstantClass(cp_, className);
         superClass_ = new ConstantClass(cp_, superName);
         attrList_ = new AttributeList();

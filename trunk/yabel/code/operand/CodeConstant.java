@@ -1,9 +1,15 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
 import yabel.ClassData;
 import yabel.OpCodes;
+import yabel.code.CodeOperand;
+import yabel.code.CodeTokenizer;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelBadNumberException;
+import yabel.code.YabelReplacementRequiredException;
+import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Operands for constants.
@@ -16,11 +22,11 @@ public enum CodeConstant implements CodeOperand {
     ICONST {
         /** Compile integer constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             checkSize(toks);
             
             // some ops have special codes
-            int i = Code.getInt(cd, toks.get(2), toks.get(0));
+            int i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
             int ic = i + 1;
             if( 0 <= ic && ic < ICONST_VALS.length ) {
                 code.appendU1(ICONST_VALS[ic]);
@@ -50,11 +56,11 @@ public enum CodeConstant implements CodeOperand {
     NUMBER {
         /** Compile integer constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             checkSize(toks);
             // compile numeric constant
             String t2 = toks.get(2);
-            String r2 = Code.isReplacement(t2);
+            String r2 = CodeTokenizer.isReplacement(t2);
             if( r2 == null )
                 throw new YabelReplacementRequiredException(toks,1);
             Number n = cd.getSafe(Number.class, r2);
@@ -67,7 +73,7 @@ public enum CodeConstant implements CodeOperand {
     CONST {
         /** Compile integer constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             // compile type-value constant
             if( toks.size() != 4 )
                 throw new YabelWrongTokenCountException(toks,2,"type and value");
@@ -82,7 +88,7 @@ public enum CodeConstant implements CodeOperand {
     STRING {
         /** Compile string constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             // compile String. Replacements already handled.
             String k = toks.get(2);
             int val = code.getConstantRef(k);
@@ -94,9 +100,9 @@ public enum CodeConstant implements CodeOperand {
     INT {
         /** Compile int constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             String t2 = toks.get(2);
-            String r2 = Code.isReplacement(t2);
+            String r2 = CodeTokenizer.isReplacement(t2);
             Integer n = null;
             if( r2 != null ) {
                 n = cd.getSafe(Integer.class, r2);
@@ -116,9 +122,9 @@ public enum CodeConstant implements CodeOperand {
     FLOAT {
         /** Compile float constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             String t2 = toks.get(2);
-            String r2 = Code.isReplacement(t2);
+            String r2 = CodeTokenizer.isReplacement(t2);
             Float n = null;
             if( r2 != null ) {
                 n = cd.getSafe(Float.class, r2);
@@ -139,9 +145,9 @@ public enum CodeConstant implements CodeOperand {
     LONG {
         /** Compile long constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             String t2 = toks.get(2);
-            String r2 = Code.isReplacement(t2);
+            String r2 = CodeTokenizer.isReplacement(t2);
             Long n = null;
             if( r2 != null ) {
                 n = cd.getSafe(Long.class, r2);
@@ -162,9 +168,9 @@ public enum CodeConstant implements CodeOperand {
     DOUBLE {
         /** Compile double constant. {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             String t2 = toks.get(2);
-            String r2 = Code.isReplacement(t2);
+            String r2 = CodeTokenizer.isReplacement(t2);
             Double n = null;
             if( r2 != null ) {
                 n = cd.getSafe(Double.class, r2);
@@ -200,5 +206,5 @@ public enum CodeConstant implements CodeOperand {
 
     /** Compile integer constant. {@inheritDoc} */
     @Override
-    abstract public void compile(Code code, List<String> toks, ClassData cd);
+    abstract public void compile(CompilerOutput code, List<String> toks, ClassData cd);
 }

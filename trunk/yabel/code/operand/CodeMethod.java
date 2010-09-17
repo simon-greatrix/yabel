@@ -1,9 +1,12 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
 import yabel.ClassData;
 import yabel.OpCodes;
+import yabel.code.CodeOperand;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Compile a method reference or call.
@@ -34,7 +37,7 @@ public enum CodeMethod implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks,
+    public void compile(CompilerOutput code, List<String> toks,
             ClassData cd) {
         if( opCode_ != (byte) 0xff ) code.appendU1(opCode_);
 
@@ -48,7 +51,7 @@ public enum CodeMethod implements CodeOperand {
         case 3: {
             // try for a reference id in the ClassData
             String p = toks.get(2);
-            i = Code.getInt(cd, p, toks.get(0));
+            i = CompilerOutput.getInt(cd, p, toks.get(0));
             break;
         }
         case 4: {

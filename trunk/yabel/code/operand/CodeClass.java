@@ -1,9 +1,12 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
 import yabel.ClassData;
 import yabel.OpCodes;
+import yabel.code.CodeOperand;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Operations that take a reference to a class constant as their operand
@@ -37,7 +40,7 @@ public enum CodeClass implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks,
+    public void compile(CompilerOutput code, List<String> toks,
             ClassData cd) {
         if( toks.size() != 3 )
             throw new YabelWrongTokenCountException(toks,1,"class name");

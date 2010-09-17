@@ -1,9 +1,12 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
 import yabel.ClassData;
 import yabel.OpCodes;
+import yabel.code.CodeOperand;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Operations that load and store in local variables.
@@ -40,12 +43,12 @@ public enum CodeLoadStore implements CodeOperand {
     RET {
         /** {@inheritDoc} */
         @Override
-        protected void compile(Code code, int i) {
-            if( i < 0x100 ) {
+        protected void compile(CompilerOutput code, int i) {
+            if( (i < 0x100) && ! code.wasLastWide() ) {
                 code.appendU1(OpCodes.RET);
                 code.appendU1((byte) i);
             } else {
-                code.appendU1(OpCodes.WIDE);
+                code.appendWide();
                 code.appendU1(OpCodes.RET);
                 code.appendU2(i);
             }
@@ -80,10 +83,10 @@ public enum CodeLoadStore implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks, ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         if( toks.size() > 3 )
             throw new YabelWrongTokenCountException(toks, 1, "variable");
-        int i = Code.getInt(cd, toks.get(2), toks.get(0));
+        int i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
         compile(code, i);
     }
 
@@ -96,7 +99,7 @@ public enum CodeLoadStore implements CodeOperand {
      * @param i
      *            the local variable ID
      */
-    protected void compile(Code code, int i) {
+    protected void compile(CompilerOutput code, int i) {
         switch (i) {
         case 0:
             code.appendU1(op0_);
@@ -111,11 +114,11 @@ public enum CodeLoadStore implements CodeOperand {
             code.appendU1(op3_);
             break;
         default:
-            if( i < 0x100 ) {
+            if( (i < 0x100) && ! code.wasLastWide() ) {
                 code.appendU1(op_);
                 code.appendU1((byte) i);
             } else {
-                code.appendU1(OpCodes.WIDE);
+                code.appendWide();
                 code.appendU1(op_);
                 code.appendU2(i);
             }

@@ -11,19 +11,26 @@ import java.util.Map;
 
 import yabel.ClassBuilder;
 import yabel.ClassData;
-import yabel.Field;
 import yabel.Method;
 import yabel.OpCodes;
 import yabel.attributes.Attribute;
 import yabel.attributes.AttributeList;
-import yabel.constants.Constant;
+import yabel.attributes.AttributeListListener;
+import yabel.code.operand.CodeArrays;
+import yabel.code.operand.CodeClass;
+import yabel.code.operand.CodeConstant;
+import yabel.code.operand.CodeField;
+import yabel.code.operand.CodeIINC;
+import yabel.code.operand.CodeInterface;
+import yabel.code.operand.CodeLDC;
+import yabel.code.operand.CodeLabel;
+import yabel.code.operand.CodeLoadStore;
+import yabel.code.operand.CodeMethod;
+import yabel.code.operand.CodeSwitch;
+import yabel.code.operand.CodeU1U2;
+import yabel.code.operand.CodeVar;
 import yabel.constants.ConstantClass;
-import yabel.constants.ConstantFieldRef;
-import yabel.constants.ConstantInterfaceMethodRef;
-import yabel.constants.ConstantMethodRef;
-import yabel.constants.ConstantNumber;
 import yabel.constants.ConstantPool;
-import yabel.constants.ConstantString;
 import yabel.io.IO;
 import yabel.parser.Decompiler;
 import yabel.parser.ParserAnalyzer;
@@ -34,13 +41,33 @@ import yabel.parser.ParserAnalyzer;
  * 
  * @author Simon Greatrix
  */
-public class Code extends Attribute {
+public class Code extends Attribute implements AttributeListListener {
 
     /** The actual characters we escape */
     private final static String ESCAPE_CHARS = "\b\t\n\f\r\"'\\";
 
+
     /** The characters used to represent escape sequences */
     private final static String ESCAPE_VALS = "btnfr\"'\\";
+
+
+    /** Map of operand names to their compilers */
+    private static Map<String, CodeOperand> OP_CODES = new HashMap<String, CodeOperand>();
+
+
+    static {
+        load(CodeArrays.values());
+        load(CodeClass.values());
+        load(CodeConstant.values());
+        load(CodeField.values());
+        load(CodeInterface.values());
+        load(CodeLoadStore.values());
+        load(CodeMethod.values());
+        load(CodeSwitch.values());
+        load(CodeU1U2.values());
+        load(CodeLabel.values());
+        load(new CodeOperand[] { CodeIINC.INSTANCE, CodeLDC.INSTANCE, CodeVar.INSTANCE });
+    }
 
 
     /**
@@ -110,6 +137,51 @@ public class Code extends Attribute {
         }
     }
 
+    /**
+     * Get an integer.
+     * 
+     * @param cd
+     *            the replacements.
+     * @param fld
+     *            the field to look up
+     * @param raw
+     *            the raw text for the op-code
+     * @return the integer
+     */
+    protected static int getInt(ClassData cd, String fld, String raw) {
+        String r = isReplacement(fld);
+        if( r != null ) {
+            Integer i = cd.getSafe(Integer.class, r);
+            return i.intValue();
+        }
+        try {
+            return Integer.parseInt(fld);
+        } catch (NumberFormatException nfe) {
+            throw new YabelBadNumberException(raw, fld, "integer");
+        }
+    }
+
+    /**
+     * Is the field value a replacement? That is, does it start with a '{' and
+     * end with a '}'?
+     * 
+     * @param v
+     *            the field value
+     * @return true if it is a replacement
+     */
+    protected static String isReplacement(String v) {
+        int l = v.length() - 1;
+        if( l < 1 ) return null;
+        if( v.charAt(0) != '{' ) return null;
+        if( v.charAt(l) != '}' ) return null;
+        return v.substring(1, l);
+    }
+
+    private static final void load(CodeOperand[] ops) {
+        for(CodeOperand op:ops) {
+            OP_CODES.put(op.name().toUpperCase(), op);
+        }
+    }
 
     /**
      * Decode a Java escape sequence.
@@ -203,7 +275,6 @@ public class Code extends Attribute {
                 + ") in " + val);
     }
 
-
     /**
      * Un-escape a string which has been escaped using the rules of Java string
      * escaping.
@@ -217,7 +288,6 @@ public class Code extends Attribute {
         unescapeJava(buf, val);
         return buf.toString();
     }
-
 
     /**
      * Un-escape a string which has been escaped using the rules of Java string
@@ -242,40 +312,34 @@ public class Code extends Attribute {
     }
 
     /** The attribute list for this Code block */
-    private AttributeList attrList_ = new AttributeList();
-
-    /** The class this code is part of */
-    private ClassBuilder class_ = null;
-
-    /** The byte code */
-    private byte[] code_ = null;
+    private final AttributeList attrList_;
 
     /** The constant pool associated with this */
     private final ConstantPool cp_;
 
+
     /** The exception handlers */
     private List<Handler> handler_ = new ArrayList<Handler>();
+
 
     /** History of this code's creation */
     private List<ClassData> history_ = new ArrayList<ClassData>();
 
-    /**
-     * Labels in compiled code. First element of list is label target, rest are
-     * label references.
-     */
-    private Map<String, Label> labels_ = new HashMap<String, Label>();
 
     /** The local variables required */
     private int maxLocals_ = -1;
 
+
     /** The stack slots required */
     private int maxStack_ = -1;
+
 
     /** The method this code implements */
     private Method method_ = null;
 
+
     /** First pass compilation */
-    private CompileStream pass1_ = new CompileStream();
+    private final CompilerOutput output_;
 
 
     /**
@@ -287,8 +351,10 @@ public class Code extends Attribute {
     public Code(ConstantPool cp) {
         super(cp, ATTR_CODE);
         cp_ = cp;
+        output_ = new CompilerOutput(cp_);
+        attrList_ = new AttributeList();
+        attrList_.setOwner(this);
     }
-
 
     /**
      * New Code attribute from class data
@@ -301,6 +367,7 @@ public class Code extends Attribute {
     public Code(ConstantPool cp, ClassData cd) {
         super(cp, cd);
         cp_ = cp;
+        output_ = new CompilerOutput(cp_);
 
         for(ClassData d:cd.getListSafe(ClassData.class, "build")) {
             String bytes = d.get(String.class, "bytes");
@@ -322,6 +389,7 @@ public class Code extends Attribute {
 
         attrList_ = new AttributeList(cp, cd.getListSafe(ClassData.class,
                 "attributes"));
+        attrList_.setOwner(this);
     }
 
 
@@ -336,6 +404,7 @@ public class Code extends Attribute {
     public Code(ConstantPool cp, InputStream input) throws IOException {
         super(cp, Attribute.ATTR_CODE);
         cp_ = cp;
+        output_ = new CompilerOutput(cp_);
 
         IO.readS4(input); // ignored
         int maxStack = IO.readU2(input);
@@ -357,6 +426,7 @@ public class Code extends Attribute {
 
         // read attributes
         attrList_ = new AttributeList(cp_, input);
+        attrList_.setOwner(this);
     }
 
 
@@ -408,9 +478,9 @@ public class Code extends Attribute {
      */
     public void addHandler(String startLabel, String endLabel,
             String handlerLabel, String catchType) {
-        int startPC = getLabelLocation(startLabel);
-        int endPC = getLabelLocation(endLabel);
-        int handlerPC = getLabelLocation(handlerLabel);
+        int startPC = output_.getLabelLocation(startLabel);
+        int endPC = output_.getLabelLocation(endLabel);
+        int handlerPC = output_.getLabelLocation(handlerLabel);
         ConstantClass cc = null;
         if( catchType != null ) cc = new ConstantClass(cp_, catchType);
 
@@ -426,80 +496,23 @@ public class Code extends Attribute {
      *            the byte sequence to append
      */
     public void appendCode(byte[] code) {
-        pass1_.write(code);
         ClassData cd = new ClassData();
         cd.put("bytes", IO.encode(code));
         history_.add(cd);
+        if( method_ !=null ) output_.appendCode(code);
     }
 
 
     /**
-     * Append a signed 4 byte value to the code currently being compiled.
+     * {@inheritDoc}
      * 
-     * @param v
-     *            the value to append
+     * @see yabel.attributes.AttributeListListener#attributeChanged(java.lang.String,
+     *      yabel.attributes.Attribute)
      */
-    void appendS4(int v) {
-        IO.writeS4(pass1_, v);
-    }
+    @Override
+    public void attributeChanged(String attrId, Attribute attr) {
+    // TODO Auto-generated method stub
 
-
-    /**
-     * Append a single byte to the code currently being compiled.
-     * 
-     * @param b
-     *            the byte to append
-     */
-    void appendU1(byte b) {
-        pass1_.write(b);
-    }
-
-
-    /**
-     * Append an U2 value to the code currently being compiled.
-     * 
-     * @param i
-     *            the value to append
-     */
-    void appendU2(int i) {
-        IO.writeU2(pass1_, i);
-    }
-
-
-    /**
-     * Append the required number of zeros for switch padding. This assumes the
-     * switch op-code has just been written.
-     */
-    void appendSwitchPadding() {
-        int s = 3 - ((pass1_.size() - 1) % 4);
-        while( s > 0 ) {
-            pass1_.write(0);
-            s--;
-        }
-    }
-
-    /** Map of operand names to their compilers */
-    private static Map<String, CodeOperand> OP_CODES = new HashMap<String, CodeOperand>();
-
-    static {
-        load(CodeArrays.values());
-        load(CodeClass.values());
-        load(CodeConstant.values());
-        load(CodeField.values());
-        load(CodeInterface.values());
-        load(CodeLoadStore.values());
-        load(CodeMethod.values());
-        load(CodeSwitch.values());
-        load(CodeU1U2.values());
-        load(CodeLabel.values());
-        load(new CodeOperand[] { CodeIINC.INSTANCE, CodeLDC.INSTANCE });
-    }
-
-
-    private static final void load(CodeOperand[] ops) {
-        for(CodeOperand op:ops) {
-            OP_CODES.put(op.name().toUpperCase(), op);
-        }
     }
 
 
@@ -697,10 +710,11 @@ public class Code extends Attribute {
         hist.put("source", raw);
         if( cd != null ) hist.put("replacements", new ClassData(cd));
         history_.add(hist);
+        if( method_ == null ) return;
 
         if( cd == null ) cd = new ClassData();
 
-        code_ = null;
+        output_.restart();
         Iterator<List<String>> iter = new CodeTokenizer(raw, cd);
         while( iter.hasNext() ) {
             List<String> toks = iter.next();
@@ -709,11 +723,16 @@ public class Code extends Attribute {
             int size = toks.size();
             if( size == 2 ) {
                 String tu = toks.get(1).toUpperCase();
+                if( "WIDE".equals(tu) ) {
+                    output_.appendWide();
+                    continue;
+                }
+
                 Byte c = OpCodes.OP_CODES.get(tu);
                 if( c == null ) {
                     throw new YabelParseException("Unrecognized opcode:" + tu);
                 }
-                pass1_.write(c.intValue());
+                output_.appendU1(c.byteValue());
                 continue;
             }
 
@@ -721,39 +740,11 @@ public class Code extends Attribute {
             String lbl = toks.get(1).toUpperCase();
             CodeOperand op = OP_CODES.get(lbl);
             if( op != null ) {
-                op.compile(this, toks, cd);
+                op.compile(output_, toks, cd);
                 continue;
             }
 
             throw new YabelParseException("Unrecognized opcode:" + toks.get(0));
-        }
-    }
-
-
-    /**
-     * Add a jump to a named location.
-     * 
-     * @param name
-     *            the location's name
-     * @param width
-     *            the width of the jump (2 or 4 bytes)
-     */
-    protected void compileJump(String name, int width) {
-        // get label's list
-        Label label = labels_.get(name);
-        if( label == null ) {
-            // create new label
-            label = new Label(name);
-            labels_.put(name, label);
-        }
-
-        LabelUse use = new LabelUse();
-        use.location_ = pass1_.size();
-        use.opLoc_ = pass1_.getLastOpPosition();
-        use.width_ = width;
-        label.usage_.add(use);
-        for(int i = 0;i < width;i++) {
-            pass1_.write(0);
         }
     }
 
@@ -764,10 +755,10 @@ public class Code extends Attribute {
      * @return representation of the decompiled code.
      */
     public ClassData decompile() {
-        finalizeCode();
+        byte[] code = output_.finalizeCode();
 
         Decompiler decomp = new Decompiler(cp_);
-        decomp.parse(code_);
+        decomp.parse(code);
         for(Handler h:handler_) {
             decomp.addHandler(h);
         }
@@ -775,50 +766,6 @@ public class Code extends Attribute {
         ClassData cd = decomp.finish();
         cd.sort();
         return cd;
-    }
-
-
-    private void finalizeCode() {
-        if( code_ != null ) return;
-
-        code_ = pass1_.toByteArray();
-
-        // set labels
-        for(Label lbl:labels_.values()) {
-            for(LabelUse use:lbl.usage_) {
-                int jump = lbl.location_ - use.opLoc_;
-                int here = use.location_;
-                if( use.width_ == 2 ) {
-                    // verify 2 byte offset is possible
-                    if( jump < Short.MIN_VALUE || jump > Short.MAX_VALUE ) {
-                        throw new YabelLabelException(
-                                "Cannot jump distance of " + jump
-                                        + " with 2-byte offset.");
-                    }
-                    code_[here] = (byte) ((jump >> 8) & 0xff);
-                    code_[here + 1] = (byte) (jump & 0xff);
-                } else {
-                    // 4 byte offset
-                    code_[here] = (byte) ((jump >> 24) & 0xff);
-                    code_[here + 1] = (byte) ((jump >> 16) & 0xff);
-                    code_[here + 2] = (byte) ((jump >> 8) & 0xff);
-                    code_[here + 3] = (byte) (jump & 0xff);
-                }
-            }
-        }
-    }
-
-
-    /**
-     * Get a class reference
-     * 
-     * @param name
-     *            name of class
-     * @return reference
-     */
-    protected int getClassRef(String name) {
-        ConstantClass c = new ConstantClass(cp_, name);
-        return c.getIndex();
     }
 
 
@@ -830,148 +777,10 @@ public class Code extends Attribute {
      * @return the byte-code
      */
     public byte[] getCode() {
-        finalizeCode();
-        byte[] newCode = new byte[code_.length];
-        System.arraycopy(code_, 0, newCode, 0, code_.length);
+        byte[] code = output_.finalizeCode();
+        byte[] newCode = new byte[code.length];
+        System.arraycopy(code, 0, newCode, 0, code.length);
         return newCode;
-    }
-
-
-    /**
-     * Get the Constant for a given reference.
-     * 
-     * @param ref
-     *            the reference
-     * @return the Constant
-     */
-    protected Constant getConstant(int ref) {
-        return cp_.get(ref);
-    }
-
-
-    /**
-     * Get a constant reference
-     * 
-     * @param number
-     *            value
-     * @return reference
-     */
-    protected int getConstantRef(Number number) {
-        Constant c = new ConstantNumber(cp_, number);
-        return c.getIndex();
-    }
-
-
-    /**
-     * Get a constant reference
-     * 
-     * @param string
-     *            value
-     * @return reference
-     */
-    protected int getConstantRef(String string) {
-        Constant c = new ConstantString(cp_, string);
-        return c.getIndex();
-    }
-
-
-    /**
-     * Get a reference to some kind of ConstantRef given a type and value.
-     * 
-     * @param raw
-     *            the raw source to report in errors
-     * @param type
-     *            the type of constant
-     * @param value
-     *            the value of the constant
-     * @return the constant's index in the pool
-     */
-    protected int getConstantRef(String raw, String type, String value) {
-        int i;
-        Number n;
-        if( type.equalsIgnoreCase("int") ) {
-            // cast to Integer
-            try {
-                n = Integer.valueOf(value);
-            } catch (NumberFormatException nfe) {
-                throw new YabelBadNumberException(raw, value, type);
-            }
-            i = getConstantRef(n);
-        } else if( type.equalsIgnoreCase("double") ) {
-            // cast to Double
-            try {
-                n = Double.valueOf(value);
-            } catch (NumberFormatException nfe) {
-                throw new YabelBadNumberException(raw, value, type);
-            }
-            i = getConstantRef(n);
-        } else if( type.equalsIgnoreCase("float") ) {
-            // cast to Float
-            try {
-                n = Float.valueOf(value);
-            } catch (NumberFormatException nfe) {
-                throw new YabelBadNumberException(raw, value, type);
-            }
-            i = getConstantRef(n);
-        } else if( type.equalsIgnoreCase("long") ) {
-            // cast to Long
-            try {
-                n = Long.valueOf(value);
-            } catch (NumberFormatException nfe) {
-                throw new YabelBadNumberException(raw, value, type);
-            }
-            i = getConstantRef(n);
-        } else if( type.equalsIgnoreCase("string") ) {
-            // it's a String (no need to cast)
-            i = getConstantRef(value);
-        } else if( type.equalsIgnoreCase("class") ) {
-            // cast to Class
-            i = getClassRef(value);
-        } else {
-            // unknown type
-            throw new YabelParseException(
-                    "Constant data type \""
-                            + type
-                            + "\" was not recognised. Use int, double, float, long, class or string. Input was \""
-                            + raw + "\"");
-        }
-
-        return i;
-    }
-
-
-    /**
-     * Get a field reference in this class. Must exist already.
-     * 
-     * @param name
-     *            field name
-     * @return reference
-     */
-    protected int getFieldRef(String name) {
-        Field f = class_.getField(name);
-        if( f == null )
-            throw new IllegalStateException("Field \"" + name+"\" is not yet defined in this class");
-
-        ConstantFieldRef ref = new ConstantFieldRef(cp_, class_.getNameUtf8(),
-                f.getName(), f.getType());
-        return ref.getIndex();
-    }
-
-
-    /**
-     * Get a field reference in another class.
-     * 
-     * @param clss
-     *            class name
-     * @param name
-     *            field name
-     * @param type
-     *            field type
-     * @return reference
-     */
-    protected int getFieldRef(String clss, String name, String type) {
-        ConstantFieldRef ref = new ConstantFieldRef(cp_, clss, name, type);
-        return ref.getIndex();
     }
 
 
@@ -986,106 +795,6 @@ public class Code extends Attribute {
     }
 
 
-    /**
-     * Is the field value a replacement? That is, does it start with a '{' and
-     * end with a '}'?
-     * 
-     * @param v
-     *            the field value
-     * @return true if it is a replacement
-     */
-    protected static String isReplacement(String v) {
-        int l = v.length() - 1;
-        if( l < 1 ) return null;
-        if( v.charAt(0) != '{' ) return null;
-        if( v.charAt(l) != '}' ) return null;
-        return v.substring(1, l);
-    }
-
-
-    /**
-     * Get an integer.
-     * 
-     * @param cd
-     *            the replacements.
-     * @param fld
-     *            the field to look up
-     * @param raw
-     *            the raw text for the op-code
-     * @return the integer
-     */
-    protected static int getInt(ClassData cd, String fld, String raw) {
-        String r = isReplacement(fld);
-        if( r != null ) {
-            Integer i = cd.getSafe(Integer.class, r);
-            return i.intValue();
-        }
-        try {
-            return Integer.parseInt(fld);
-        } catch (NumberFormatException nfe) {
-            throw new YabelBadNumberException(raw, fld, "integer");
-        }
-    }
-
-
-    /**
-     * Get an interface method reference.
-     * 
-     * @param clss
-     *            interface
-     * @param name
-     *            method name
-     * @param type
-     *            method type
-     * @return reference
-     */
-    protected int getInterfaceMethodRef(String clss, String name, String type) {
-        ConstantInterfaceMethodRef c = new ConstantInterfaceMethodRef(cp_,
-                clss, name, type);
-        return c.getIndex();
-    }
-
-
-    /**
-     * Define a new label at the current position.
-     * 
-     * @param name
-     *            the label's name
-     */
-    protected void setLabel(String name) {
-        Label label = getLabel(name);
-        if( label.location_ != -1 ) {
-            throw new YabelLabelException("Label \"" + name
-                    + "\" defined more than once");
-        }
-        label.location_ = pass1_.size();
-    }
-
-
-    private Label getLabel(String name) {
-        Label label = labels_.get(name);
-        if( label == null ) {
-            // create new label
-            label = new Label(name);
-            labels_.put(name, label);
-        }
-        return label;
-    }
-
-
-    private int getLabelLocation(String lbl) {
-        Label li = labels_.get(lbl);
-        if( li == null )
-            throw new YabelLabelException("Label \"" + lbl
-                    + "\" is not defined");
-        int loc = li.location_;
-        if( loc == -1 )
-            throw new YabelLabelException("Label \"" + lbl
-                    + "\" is not located");
-        return loc;
-    }
-
-
     public int getMaxLocals() {
         return maxLocals_;
     }
@@ -1097,53 +806,18 @@ public class Code extends Attribute {
 
 
     /**
-     * Get a method reference in this class.
-     * 
-     * @param name
-     *            method name
-     * @param type
-     *            method type
-     * @return reference
-     */
-    protected int getMethodRef(String name, String type) {
-        ConstantMethodRef ref = new ConstantMethodRef(cp_, class_.getName(),
-                name, type);
-        return ref.getIndex();
-    }
-
-
-    /**
-     * Get a method reference in another class
-     * 
-     * @param clss
-     *            class name
-     * @param name
-     *            method name
-     * @param type
-     *            type
-     * @return reference
-     */
-    protected int getMethodRef(String clss, String name, String type) {
-        ConstantMethodRef ref = new ConstantMethodRef(cp_, clss, name, type);
-        return ref.getIndex();
-    }
-
-
-    /**
      * Reset this code block to completely empty. Note that any constants
      * associated with the previous code will not be removed from the constant
      * pool.
      */
     public void reset() {
-        code_ = null;
+        output_.reset();
         handler_.clear();
-        labels_.clear();
         history_.clear();
         maxLocals_ = -1;
         maxStack_ = -1;
-        pass1_.reset();
+        output_.reset();
     }
-
 
     /**
      * Set the byte code for this Code. Any existing code is discarded. Any
@@ -1158,13 +832,13 @@ public class Code extends Attribute {
      *            the byte code
      */
     public void setByteCode(int maxStack, int maxLocals, byte[] code) {
-        pass1_.reset();
+        output_.reset();
         maxStack_ = maxStack;
         maxLocals_ = maxLocals;
-        labels_.clear();
         history_.clear();
         appendCode(code);
     }
+
 
 
     public void setMaxLocals(int maxLocals) {
@@ -1186,8 +860,21 @@ public class Code extends Attribute {
      *            the method
      */
     public void setOwner(ClassBuilder classBuilder, Method method) {
-        class_ = classBuilder;
+        assert method_ == null : "Code owner already set";
+        assert classBuilder != null : "Code class must not be null";
+        assert method != null : "Code owner must not be null";
+        output_.setClass(classBuilder);
         method_ = method;
+
+        // prior to the method being set nothing was compiled
+        List<ClassData> pend = new ArrayList<ClassData>(history_);
+        history_.clear();
+        for(ClassData cd : pend) {
+            if( cd.containsKey("source") )
+                compile(cd.get(String.class,"source"), cd.get(ClassData.class,"replacements"));
+            else
+                appendCode(IO.decode(cd.get(String.class,"bytes")));
+        }
     }
 
 
@@ -1219,7 +906,7 @@ public class Code extends Attribute {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        finalizeCode();
+        byte code[] = output_.finalizeCode();
 
         // first get the attribute size
         ByteArrayOutputStream attrs = new ByteArrayOutputStream();
@@ -1227,7 +914,7 @@ public class Code extends Attribute {
         byte[] attrBytes = attrs.toByteArray();
 
         IO.writeU2(baos, attrId_.getIndex());
-        IO.writeS4(baos, 10 + code_.length + handler_.size() * 8
+        IO.writeS4(baos, 10 + code.length + handler_.size() * 8
                 + attrBytes.length);
 
         if( (maxStack_ == -1) || (maxLocals_ == -1) ) {
@@ -1240,8 +927,8 @@ public class Code extends Attribute {
         IO.writeU2(baos, maxLocals_);
 
         // write out code
-        IO.writeS4(baos, code_.length);
-        baos.write(code_, 0, code_.length);
+        IO.writeS4(baos, code.length);
+        baos.write(code, 0, code.length);
 
         // write out exception handlers
         int s = handler_.size();

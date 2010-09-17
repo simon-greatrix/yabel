@@ -1,10 +1,13 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
-import yabel.ClassBuilder;
 import yabel.ClassData;
+import yabel.Method;
 import yabel.OpCodes;
+import yabel.code.CodeOperand;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 
 /** Operands related to interfaces
  * 
@@ -16,10 +19,10 @@ public enum CodeInterface implements CodeOperand {
     INVOKEINTERFACE {
         /** {@inheritDoc} */
         @Override
-        public void compile(Code code, List<String> toks, ClassData cd) {
+        public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             code.appendU1(OpCodes.INVOKEINTERFACE);
             super.compile(code,toks,cd);
-            int nargs = 1 + ClassBuilder.getArgsForType(toks.get(4));
+            int nargs = 1 + Method.getArgsForType(toks.get(4));
             code.appendU1((byte) nargs);
             code.appendU1((byte) 0);
         }
@@ -30,7 +33,7 @@ public enum CodeInterface implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks, ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         // ensure we have three elements for the reference
         if( toks.size() != 5 ) {
             throw new YabelWrongTokenCountException(toks, 3, "class, name, and type");
