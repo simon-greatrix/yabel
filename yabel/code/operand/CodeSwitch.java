@@ -1,4 +1,4 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.Iterator;
 import java.util.List;
@@ -7,6 +7,9 @@ import java.util.Map.Entry;
 import yabel.ClassData;
 import yabel.OpCodes;
 import yabel.SwitchData;
+import yabel.code.CodeOperand;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Compile switch related operations
@@ -19,7 +22,7 @@ public enum CodeSwitch implements CodeOperand {
     SWITCH {
         /** {@inheritDoc} */
         @Override
-        public void compile(Code code, SwitchData data) {
+        public void compile(CompilerOutput code, SwitchData data) {
             // Choose the smallest kind of switch.
             // Lookup has a value-label pair for each value
             int lookupSize = 8 * data.size();
@@ -37,7 +40,7 @@ public enum CodeSwitch implements CodeOperand {
     LOOKUPSWITCH {
         /** {@inheritDoc} */
         @Override
-        public void compile(Code code, SwitchData data) {
+        public void compile(CompilerOutput code, SwitchData data) {
             code.appendU1(OpCodes.LOOKUPSWITCH);
             code.appendSwitchPadding();
 
@@ -56,7 +59,7 @@ public enum CodeSwitch implements CodeOperand {
     TABLESWITCH {
         /** {@inheritDoc} */
         @Override
-        public void compile(Code code, SwitchData data) {
+        public void compile(CompilerOutput code, SwitchData data) {
             code.appendU1(OpCodes.TABLESWITCH);
             code.appendSwitchPadding();
 
@@ -83,7 +86,7 @@ public enum CodeSwitch implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks, ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         SwitchData vals;
         if( toks.size() == 3 ) {
             // named SwitchData
@@ -134,5 +137,5 @@ public enum CodeSwitch implements CodeOperand {
      * @param data
      *            the switch data
      */
-    protected abstract void compile(Code code, SwitchData data);
+    protected abstract void compile(CompilerOutput code, SwitchData data);
 }

@@ -1,9 +1,13 @@
-package yabel.code;
+package yabel.code.operand;
 
 import java.util.List;
 
 import yabel.ClassData;
 import yabel.OpCodes;
+import yabel.code.CodeOperand;
+import yabel.code.CodeTokenizer;
+import yabel.code.CompilerOutput;
+import yabel.code.YabelWrongTokenCountException;
 import yabel.constants.Constant;
 import yabel.constants.ConstantNumber;
 
@@ -26,7 +30,7 @@ public class CodeLDC implements CodeOperand {
      * @param val
      *            the entry in the constant pool
      */
-    public static void compile(Code code, int val) {
+    public static void compile(CompilerOutput code, int val) {
         Constant con = code.getConstant(val);
         if( con instanceof ConstantNumber ) {
             // longs and doubles must use LDC2_W
@@ -55,13 +59,13 @@ public class CodeLDC implements CodeOperand {
 
     /** {@inheritDoc} */
     @Override
-    public void compile(Code code, List<String> toks, ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         int i = -1;
         switch (toks.size()) {
         case 3: {
             // raw, LDC, property
             String t2 = toks.get(2);
-            String r2 = Code.isReplacement(t2);
+            String r2 = CodeTokenizer.isReplacement(t2);
             Object o = t2;
             if( r2 != null ) o = cd.get(Object.class, r2, t2);
             if( o instanceof Number ) {
@@ -91,7 +95,7 @@ public class CodeLDC implements CodeOperand {
         }
 
         // try for a bare int
-        if( i == -1 ) i = Code.getInt(cd, toks.get(2), toks.get(0));
+        if( i == -1 ) i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
         compile(code, i);
     }
 

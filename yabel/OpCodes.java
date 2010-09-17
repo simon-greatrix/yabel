@@ -659,8 +659,11 @@ public class OpCodes {
     /** JVM op-code */
     public static final byte TABLESWITCH = (byte) 170;
 
+
+
     /** JVM op-code */
     public static final byte WIDE = (byte) 196;
+
 
     static {
         Map<String, Byte> m = new HashMap<String, Byte>();
@@ -696,22 +699,24 @@ public class OpCodes {
                 continue;
             }
         }
-        
+
         // check all OP_NAMES have declared constants
-        for(String s : OP_NAMES) {
+        for(String s:OP_NAMES) {
             if( s.equals("") ) continue;
             try {
                 java.lang.reflect.Field f = OpCodes.class.getDeclaredField(s);
                 if( f.getModifiers() != access ) {
-                    System.err.println("WARNING: Constant "+f.getName()+" does not map to a public static final field");
+                    System.err.println("WARNING: Constant " + f.getName()
+                            + " does not map to a public static final field");
                 }
-                if( ! f.getType().equals(Byte.TYPE) ) {
-                    System.err.println("WARNING: Constant "+f.getName()+" does not map to a byte constant");
+                if( !f.getType().equals(Byte.TYPE) ) {
+                    System.err.println("WARNING: Constant " + f.getName()
+                            + " does not map to a byte constant");
                 }
             } catch (SecurityException e) {
                 continue;
             } catch (NoSuchFieldException e) {
-                System.err.println("OpCode "+s+" has no constant defined");
+                System.err.println("OpCode " + s + " has no constant defined");
             }
         }
     }
@@ -770,7 +775,6 @@ public class OpCodes {
         return getOpName(b & 0xff);
     }
 
-
     /**
      * Get the Op-Code name for a given byte. Will return "&lt;unknown&gt;" if
      * the code is not recognised.
@@ -785,4 +789,28 @@ public class OpCodes {
         return (r == null) ? "<unknown>" : r;
 
     }
+
+
+    /**
+     * Get the internal name of a class
+     * 
+     * @param cls
+     *            the class
+     * @return the internal name
+     */
+    public static String getTypeName(Class<?> cls) {
+        if( cls.equals(Byte.TYPE) ) return "B";
+        if( cls.equals(Character.TYPE) ) return "C";
+        if( cls.equals(Double.TYPE) ) return "D";
+        if( cls.equals(Float.TYPE) ) return "F";
+        if( cls.equals(Integer.TYPE) ) return "I";
+        if( cls.equals(Long.TYPE) ) return "J";
+        if( cls.equals(Short.TYPE) ) return "S";
+        if( cls.isArray() ) return cls.getName();
+
+        String nm = cls.getName();
+        nm = nm.replace('.', '/');
+        return "L" + nm + ";";
+    }
+
 }

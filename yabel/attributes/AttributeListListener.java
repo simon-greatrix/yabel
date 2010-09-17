@@ -7,6 +7,13 @@ package yabel.attributes;
  * 
  */
 public interface AttributeListListener {
-    /** Notify this listener that the attributes have changed */
-    public void attributesChanged();
+    /**
+     * Notify this listener that the attributes have changed.
+     * 
+     * @param attrId
+     *            the name of the changed attribute
+     * @param attr
+     *            the new value of the attribute (null if removed)
+     */
+    public void attributeChanged(String attrId, Attribute attr);
 }

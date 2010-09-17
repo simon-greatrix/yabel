@@ -418,7 +418,7 @@ public class ParserAnalyzer implements ParserListener {
             maxLocalVars_ = (access & ClassBuilder.ACC_STATIC) != 0 ? 0 : 1;
 
             // one local var per parameter
-            maxLocalVars_ += ClassBuilder.getArgsForType(method.getType().get());
+            maxLocalVars_ += Method.getArgsForType(method.getType().get());
         }
 
         Code attrCode = method.getCode();
@@ -725,7 +725,7 @@ public class ParserAnalyzer implements ParserListener {
             int v = IO.readU2(buffer, 1);
             ConstantRef cr = cp_.validate(v, ConstantRef.class);
             String type = cr.getType().get();
-            delta -= ClassBuilder.getArgsForType(type);
+            delta -= Method.getArgsForType(type);
             if( buffer[0] != OpCodes.INVOKESTATIC ) {
                 // if it is not a static, it uses an object ref
                 delta -= 1;

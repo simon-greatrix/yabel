@@ -14,17 +14,35 @@ import java.util.*;
  * @author Simon Greatrix
  * 
  */
-class CodeTokenizer implements Iterator<List<String>> {
+public class CodeTokenizer implements Iterator<List<String>> {
+
     /** Internal sub-tokenizer state */
     private enum State {
         /** No more tokens */
         FINISHED,
-        
+
         /** Has a next token */
         HAS_NEXT,
-        
+
         /** Sub-tokenizer may have more tokens */
         RETRY
+    }
+
+
+    /**
+     * Is the field value a replacement? That is, does it start with a '{' and
+     * end with a '}'?
+     * 
+     * @param v
+     *            the field value
+     * @return field to use as a replacement or null if not a replacement
+     */
+    public static String isReplacement(String v) {
+        int l = v.length() - 1;
+        if( l < 1 ) return null;
+        if( v.charAt(0) != '{' ) return null;
+        if( v.charAt(l) != '}' ) return null;
+        return v.substring(1, l);
     }
 
     /** Position in source */
@@ -55,7 +73,10 @@ class CodeTokenizer implements Iterator<List<String>> {
      *            replacements to substitute in
      */
     CodeTokenizer(String src, ClassData replacements) {
-        src_ = src;
+        // remove comments from source
+        String s = src.replaceAll("/\\*.*?\\*/", " ");
+        s = s.replaceAll("//.*?\n", "\n");
+        src_ = s;
         replacements_ = replacements;
         ret_ = Collections.unmodifiableList(token_);
     }

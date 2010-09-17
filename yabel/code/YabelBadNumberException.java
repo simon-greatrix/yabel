@@ -40,7 +40,7 @@ public class YabelBadNumberException extends NumberFormatException {
      */
     public YabelBadNumberException(String raw, String fld, String type) {
         super(String.format(
-                "Unable to convert \"{0}\" to an \"{1}\". Input was \"{2}\".",
+                "Unable to convert \"%s\" to an \"%s\". Input was \"%s\".",
                 fld, type, raw));
     }
 }

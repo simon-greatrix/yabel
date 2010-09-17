@@ -1,11 +1,16 @@
 package yabel.constants;
 
-import yabel.io.IO;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import yabel.ClassBuilder;
+import yabel.io.IO;
 
 /**
  * A Constant Pool in a class
@@ -17,6 +22,9 @@ public class ConstantPool {
     /** Indexed constants */
     private final List<Constant> index_ = new ArrayList<Constant>();
 
+    /** The class that owns this constant pool */
+    private final ClassBuilder owner_;
+
     /** Canonical constants */
     private final Map<Constant, Constant> pool_ = new HashMap<Constant, Constant>();
 
@@ -24,20 +32,30 @@ public class ConstantPool {
     private int size_ = 0;
 
 
-    /** Create new empty constant pool */
-    public ConstantPool() {
-    // do nothing
+    /**
+     * Create new empty constant pool.
+     * 
+     * @param owner
+     *            the owning class builder
+     */
+    public ConstantPool(ClassBuilder owner) {
+        owner_ = owner;
     }
 
 
     /**
      * Read a constant pool from a stream.
      * 
+     * @param owner
+     *            the owning class builder
      * @param input
      *            the stream
      * @throws IOException
      */
-    public ConstantPool(InputStream input) throws IOException {
+    public ConstantPool(ClassBuilder owner, InputStream input)
+            throws IOException {
+        owner_ = owner;
+
         // how many constants?
         int s = IO.readU2(input);
 
@@ -100,8 +118,8 @@ public class ConstantPool {
                 if( c == null ) continue;
                 if( !(c instanceof Unresolved) ) continue;
                 Unresolved u = (Unresolved) c;
-                c = u.resolve(this,ph);
-                if( c!=null ) {
+                c = u.resolve(this, ph);
+                if( c != null ) {
                     c.index_ = u.index_;
                     pool_.remove(u);
                     index_.set(c.index_, c);
@@ -133,8 +151,9 @@ public class ConstantPool {
             } else {
                 // replacement constant - ensure it is not already assigned
                 Constant c = index_.get(canon.index_);
-                if( (c!=null) && ! c.equals(canon) ) {
-                    throw new AssertionError("Cannot reassign constant "+canon.index_+" from "+c+" to "+canon);
+                if( (c != null) && !c.equals(canon) ) {
+                    throw new AssertionError("Cannot reassign constant "
+                            + canon.index_ + " from " + c + " to " + canon);
                 }
             }
 
@@ -190,6 +209,11 @@ public class ConstantPool {
     }
 
 
+    public ClassBuilder getOwner() {
+        return owner_;
+    }
+
+
     /**
      * Get the index of a Utf8 constant for a string
      * 
@@ -216,15 +240,15 @@ public class ConstantPool {
         ConstantUtf8 utf8 = new ConstantUtf8(this, str, create);
         return utf8.getIndex();
     }
-    
-    
+
+
     /** {@inheritDoc} */
     public String toString() {
         StringBuilder buf = new StringBuilder();
         buf.append("Pool [");
-        for(int i=0;i<index_.size();i++) {
+        for(int i = 0;i < index_.size();i++) {
             Constant c = index_.get(i);
-            if( c==null ) continue;
+            if( c == null ) continue;
             buf.append("    ").append(i).append(": ").append(c).append('\n');
         }
         buf.append("]");
