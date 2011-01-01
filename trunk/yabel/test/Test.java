@@ -13,6 +13,7 @@ import org.xml.sax.SAXException;
 
 import yabel.ClassBuilder;
 import yabel.ClassData;
+import yabel.Access;
 import yabel.Method;
 import yabel.code.Code;
 import yabel.io.XMLDataReader;
@@ -38,7 +39,7 @@ public class Test {
     }
     
     static void testMethod(ClassBuilder cls, Method m) {
-        if( (m.getAccess() & (ClassBuilder.ACC_ABSTRACT | ClassBuilder.ACC_NATIVE)) != 0 ) return;
+        if( (m.getAccess() & (Access.ACC_ABSTRACT | Access.ACC_NATIVE)) != 0 ) return;
         System.out.println("Testing "+cls.getName()+" : "+m.getName()+m.getType());
         Code code = m.getCode();
         ClassData dna = code.decompile();
@@ -59,7 +60,7 @@ public class Test {
         }
         code.writeTo(baos);
         byte[] compiled = baos.toByteArray();
-
+// System.out.println(cls.getConstantPool());
         checkBytes(original,compiled);
     }
     
@@ -79,9 +80,9 @@ public class Test {
         InputStream in = new FileInputStream(file);
         ClassBuilder builder = new ClassBuilder(in);
         in.close();
+ //       System.out.println(builder.getConstantPool());
         
         ClassData cd1 = builder.toClassData();
-        System.out.println(cd1);
         ClassBuilder b2 = new ClassBuilder(cd1);
         ClassData cd2 = b2.toClassData();
         

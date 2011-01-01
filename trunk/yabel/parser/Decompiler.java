@@ -22,10 +22,12 @@ import yabel.io.IO;
 import yabel.parser.decomp.Label;
 import yabel.parser.decomp.LabelList;
 import yabel.parser.decomp.LabelSwitch;
+import yabel.parser.decomp.LabeledHandler;
 import yabel.parser.decomp.Multi;
 import yabel.parser.decomp.Ops;
 import yabel.parser.decomp.Simple;
 import yabel.parser.decomp.Source;
+import yabel.parser.decomp.VarDef;
 import yabel.parser.decomp.VarRef;
 import yabel.parser.decomp.VariableSet;
 import yabel.parser.decomp.Label.Ref4;
@@ -89,11 +91,6 @@ public class Decompiler implements ParserListener {
     private static Map<Integer, Source> SOURCE = Collections.synchronizedMap(new HashMap<Integer, Source>());
 
     /**
-     * Buffer used to build the output.
-     */
-    private StringBuilder buf_ = new StringBuilder();
-
-    /**
      * Configuration data associated with the decompiled code
      */
     private final ClassData cd_ = new ClassData();
@@ -107,7 +104,7 @@ public class Decompiler implements ParserListener {
     private final List<Decompiler.OpCode> decomp_ = new ArrayList<Decompiler.OpCode>();
 
     /** Exception handlers associated with the code */
-    private final List<ClassData> handlers_ = new ArrayList<ClassData>();
+    private final List<LabeledHandler> handlers_ = new ArrayList<LabeledHandler>();
 
     /** Switches in the code */
     private final Map<String, LabelSwitch> switches_ = new HashMap<String, LabelSwitch>();
@@ -134,7 +131,7 @@ public class Decompiler implements ParserListener {
     public Decompiler(ConstantPool cp) {
         cp_ = cp;
         result_.put("data", cd_);
-        result_.putList(ClassData.class, "handlers", handlers_);
+        result_.putList(ClassData.class, "handlers", new ArrayList<ClassData>());
     }
 
 
@@ -146,21 +143,7 @@ public class Decompiler implements ParserListener {
      *            the exception handler
      */
     public void addHandler(Handler h) {
-        ClassData cd = new ClassData();
-        cd.put("start", labels_.getRef(h.getStartPC()));
-        cd.put("end", labels_.getRef(h.getEndPC()));
-        cd.put("handler", labels_.getRef(h.getHandlerPC()));
-
-        // the type may be null for a catch-everything handler
-        ConstantClass catchType = h.getCatchType();
-        if( catchType == null ) {
-            cd.put("type", null);
-        } else {
-            cd.put("type", catchType.getClassName().get());
-        }
-
-        // save to class data
-        handlers_.add(cd);
+        handlers_.add(new LabeledHandler(labels_,h));
     }
 
 
@@ -188,7 +171,26 @@ public class Decompiler implements ParserListener {
     }
 
 
-    private void decompile2(byte[] buffer, Decompiler.OpCode opc) {
+    private void decompile1(byte[] buffer, Decompiler.OpCode opc, int position) {
+        byte b = buffer[0];
+        Source src = varSet_.decomp(b, position);
+        if( src != null ) {
+            opc.opCode_ = src;
+            return;
+        }
+
+        Integer v = Integer.valueOf(0xff & b);
+        src = SOURCE.get(v);
+        if( src == null ) {
+            src = new Simple(b);
+            SOURCE.put(v, src);
+        }
+        opc.opCode_ = src;
+        return;
+    }
+
+
+    private void decompile2(byte[] buffer, Decompiler.OpCode opc, int position) {
         Integer v = Integer.valueOf((buffer[0] & 0xff) << 8
                 | (buffer[1] & 0xff));
         Source src = SOURCE.get(v);
@@ -199,8 +201,7 @@ public class Decompiler implements ParserListener {
 
         switch (buffer[0]) {
         case OpCodes.BIPUSH:
-            buf_.append("ICONST:").append(buffer[1]);
-            src = new Simple(buf_.toString());
+            src = new Simple("ICONST:" + buffer[1]);
             SOURCE.put(v, src);
             opc.opCode_ = src;
             return;
@@ -210,16 +211,15 @@ public class Decompiler implements ParserListener {
             opc.opCode_ = decompileLDC(c);
             return;
         case OpCodes.NEWARRAY:
-            buf_.append("NEWARRAY:").append(OpCodes.getArrayType(buffer[1]));
-            src = new Simple(buf_.toString());
+            src = new Simple("NEWARRAY:" + OpCodes.getArrayType(buffer[1]));
             SOURCE.put(v, src);
             opc.opCode_ = src;
             return;
         default:
             // Must be load, store or ret
-            buf_.append(OpCodes.getOpName(buffer[0])).append(':').append(
-                    0xff & buffer[1]);
-            opc.opCode_ = new Simple(buf_.toString());
+            c = 0xff & buffer[1];
+            opc.opCode_ = new Multi(OpCodes.getOpName(buffer[0]),
+                    varSet_.getRef(c, position));
             return;
         }
     }
@@ -241,8 +241,7 @@ public class Decompiler implements ParserListener {
             opc.opCode_ = decompileLDC(v);
             return;
         case OpCodes.SIPUSH:
-            buf_.append("ICONST:").append((short) v);
-            opc.opCode_ = new Simple(buf_.toString());
+            opc.opCode_ = new Simple("ICONST:" + ((short) v));
             return;
 
             // handle method invocations
@@ -252,8 +251,7 @@ public class Decompiler implements ParserListener {
             // falls through
         case OpCodes.INVOKEVIRTUAL: {
             String mNm = refToData("method", v);
-            buf_.append(OpCodes.getOpName(op)).append(":").append(mNm);
-            opc.opCode_ = new Simple(buf_.toString());
+            opc.opCode_ = new Multi(OpCodes.getOpName(op), mNm);
             return;
         }
 
@@ -266,9 +264,7 @@ public class Decompiler implements ParserListener {
             // falls through
         case OpCodes.NEW: {
             String cNm = classToData(v);
-
-            buf_.append(OpCodes.getOpName(op)).append(":").append(cNm);
-            opc.opCode_ = new Simple(buf_.toString());
+            opc.opCode_ = new Multi(OpCodes.getOpName(op), cNm);
             return;
         }
 
@@ -280,9 +276,8 @@ public class Decompiler implements ParserListener {
         case OpCodes.GETSTATIC:
             // falls through
         case OpCodes.PUTSTATIC: {
-            String mNm = refToData("field", v);
-            buf_.append(OpCodes.getOpName(op)).append(":").append(mNm);
-            opc.opCode_ = new Simple(buf_.toString());
+            String fNm = refToData("field", v);
+            opc.opCode_ = new Multi(OpCodes.getOpName(op), fNm);
             return;
         }
 
@@ -302,16 +297,14 @@ public class Decompiler implements ParserListener {
         switch (buffer[0]) {
         case OpCodes.MULTIANEWARRAY: {
             int v = IO.readU2(buffer, 1);
-            buf_.append("MULTIANEWARRAY:").append(classToData(v)).append(":").append(
-                    IO.readU1(buffer, 3));
-            opc.opCode_ = new Simple(buf_.toString());
+            opc.opCode_ = new Multi("MULTIANEWARRAY", classToData(v),
+                    Integer.toString(IO.readU1(buffer, 3)));
             return;
         }
 
         case OpCodes.WIDE: {
             int op = IO.readU1(buffer, 1);
             int v = IO.readU2(buffer, 2);
-            buf_.append(OpCodes.getOpName(op)).append(':').append(v);
             VarRef ref = varSet_.getRef(v, position);
             opc.opCode_ = new Multi(OpCodes.getOpName(op), ref);
             return;
@@ -337,8 +330,7 @@ public class Decompiler implements ParserListener {
         case OpCodes.INVOKEINTERFACE: {
             int v = IO.readU2(buffer, 1);
             String iNm = refToData("iface", v);
-            buf_.append("INVOKEINTERFACE:").append(iNm);
-            opc.opCode_ = new Simple(buf_.toString());
+            opc.opCode_ = new Multi("INVOKEINTERFACE", iNm);
             return;
         }
         default:
@@ -511,14 +503,32 @@ public class Decompiler implements ParserListener {
             if( lbl != null ) {
                 buf.append(lbl.source()).append('\n');
             }
-            buf.append("    ").append(opc.opCode_.source()).append('\n');
+            List<VarDef> defs = varSet_.getDefs(opc.location_);
+            if( !defs.isEmpty() ) {
+                for(VarDef v : defs) {                    
+                    buf.append("    ").append(v.source());
+                }
+            }
+            buf.append("    ");
+            buf.append("/* ").append(opc.location_).append(" */ ");
+            buf.append(opc.opCode_.source()).append('\n');
             Byte b = Byte.valueOf(opc.code_);
             if( Parser.OP_EXIT.contains(b) || Parser.BRANCH_OPS.contains(b) )
                 buf.append('\n');
         }
 
+        // decompile complete
         String src = buf.toString();
         result_.put("source", src);
+        
+        // add the exception handlers
+        List<ClassData> handlers = result_.getList(ClassData.class, "handlers");
+        handlers.clear();
+        for(LabeledHandler lh : handlers_) {
+            handlers.add(lh.toClassData());
+        }
+        
+        // return result
         cd_.sort();
         result_.sort();
         return result_;
@@ -546,18 +556,6 @@ public class Decompiler implements ParserListener {
         decomp_.add(opc);
         opc.code_ = buffer[0];
         opc.location_ = position;
-        if( length == 1 ) {
-            Integer v = Integer.valueOf(0xff & buffer[0]);
-            Source src = SOURCE.get(v);
-            if( src == null ) {
-                src = new Simple(buffer[0]);
-                SOURCE.put(v, src);
-            }
-            opc.opCode_ = src;
-            return;
-        }
-
-        buf_.setLength(0);
 
         // switches are variable length
         if( buffer[0] == OpCodes.TABLESWITCH ) {
@@ -572,8 +570,11 @@ public class Decompiler implements ParserListener {
 
         // it's not a switch so the length tells us what it is
         switch (length) {
+        case 1:
+            decompile1(buffer, opc, position);
+            return;
         case 2:
-            decompile2(buffer, opc);
+            decompile2(buffer, opc, position);
             return;
         case 3:
             decompile3(buffer, opc, position);
@@ -604,7 +605,6 @@ public class Decompiler implements ParserListener {
         Parser parser = new Parser(this);
         decomp_.clear();
         cd_.clear();
-        buf_.setLength(0);
         for(int i = 0;i < code.length;i++) {
             parser.parse(code[i]);
         }
@@ -647,9 +647,18 @@ public class Decompiler implements ParserListener {
             sa.add(type);
             cd_.putList(String.class, pNm, sa);
         } else {
-            // return explicit specification
+            // return explicit specification if not declared in this class
             StringBuilder buf = new StringBuilder();
-            if( !clsName.equals(cp_.getOwner().getName()) ) required = 3;
+            if( !clsName.equals(cp_.getOwner().getName()) ) {
+                required = 3;
+            } else {
+                // in this class, but if it is inherited give full specification
+                if( "field".equals(prefix) ) {
+                    if( cp_.getOwner().getDeclaredField(name) == null ) required = 3;
+                } else if( "method".equals(prefix) ) {
+                    if( cp_.getOwner().getDeclaredMethod(name,type) == null ) required = 3;                    
+                }
+            }
             if( required == 3 ) buf.append(cls).append(':');
             buf.append(name);
             if( required >= 2 ) buf.append(':').append(type);

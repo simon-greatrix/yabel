@@ -4,10 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 import yabel.attributes.AttributeList;
 import yabel.constants.ConstantClass;
@@ -41,57 +38,12 @@ import yabel.io.IO;
  */
 public class ClassBuilder {
 
-    /** JVM access modifier */
-    public static final int ACC_ABSTRACT = 0x0400;
-
-    /** JVM access modifier */
-    public static final int ACC_FINAL = 0x0010;
-
-    /** JVM access modifier */
-    public static final int ACC_INTERFACE = 0x0200;
-
-    /** Map of access names to their masks */
-    private static final Map<String, Integer> ACC_MASKS;
-
-    /** Map of access masks to their names */
-    private static final String[] ACC_NAMES = new String[16];
-
-    /** JVM access modifier */
-    public static final int ACC_NATIVE = 0x0100;
-
-    /** JVM access modifier */
-    public static final int ACC_PRIVATE = 0x0002;
-
-    /** JVM access modifier */
-    public static final int ACC_PROTECTED = 0x0004;
-
-    /** JVM access modifier */
-    public static final int ACC_PUBLIC = 0x0001;
-
-    /** JVM access modifier */
-    public static final int ACC_STATIC = 0x0008;
-
-    /** JVM access modifier */
-    public static final int ACC_STRICT = 0x0800;
-
-    /** JVM access modifier */
-    public static final int ACC_SUPER = 0x0020;
-
-    /** JVM access modifier */
-    public static final int ACC_SYNCH = 0x0020;
-
-    /** JVM access modifier */
-    public static final int ACC_TRANSIENT = 0x0080;
-
-    /** JVM access modifier */
-    public static final int ACC_VOLATILE = 0x0040;
-
     /**
      * If set to true, produce more output
      * 
      * @internal
      */
-    public static boolean DEBUG = true;
+    public static boolean DEBUG = false;
 
     /** Version code for Java 1.1 */
     public static final int JAVA_VERSION_1_1 = 0x0003002d;
@@ -110,97 +62,6 @@ public class ClassBuilder {
 
     /** Version code for Java 1.6 */
     public static final int JAVA_VERSION_1_6 = 0x00000032;
-
-
-    /**
-     * Which bit does a value correspond to?
-     * 
-     * @param val
-     *            the value
-     * @return the bit
-     */
-    private static int bit(int val) {
-        int v = val;
-        int b = 1;
-        for(int i = 0;i < 16;i++) {
-            if( b == v ) return i;
-            b <<= 1;
-        }
-        throw new IllegalArgumentException(val
-                + " could not be matched to a bit");
-    }
-
-    static {
-        for(int j = 0;j < ACC_NAMES.length;j++) {
-            ACC_NAMES[j] = "(unknown:" + j + ")";
-        }
-        ACC_NAMES[bit(ACC_ABSTRACT)] = "abstract";
-        ACC_NAMES[bit(ACC_FINAL)] = "final";
-        ACC_NAMES[bit(ACC_INTERFACE)] = "interface";
-        ACC_NAMES[bit(ACC_NATIVE)] = "native";
-        ACC_NAMES[bit(ACC_PRIVATE)] = "private";
-        ACC_NAMES[bit(ACC_PROTECTED)] = "protected";
-        ACC_NAMES[bit(ACC_PUBLIC)] = "public";
-        ACC_NAMES[bit(ACC_STATIC)] = "static";
-        ACC_NAMES[bit(ACC_STRICT)] = "strictfp";
-        ACC_NAMES[bit(ACC_SUPER)] = "super";
-        ACC_NAMES[bit(ACC_SYNCH)] = "synchronized";
-        ACC_NAMES[bit(ACC_TRANSIENT)] = "transient";
-        ACC_NAMES[bit(ACC_VOLATILE)] = "volatile";
-
-        Map<String, Integer> s2i = new HashMap<String, Integer>();
-        int k = 1;
-        for(int j = 0;j < ACC_NAMES.length;j++) {
-            s2i.put(ACC_NAMES[j], Integer.valueOf(k));
-            k *= 2;
-        }
-        ACC_MASKS = Collections.unmodifiableMap(s2i);
-    }
-
-
-    /**
-     * Get the textual representation of an access code for a given bit-mask
-     * 
-     * @param m
-     *            the bit mask
-     * @return the access representation
-     */
-    public static String accessCode(int m) {
-        if( m == 0 ) return "";
-        StringBuilder buf = new StringBuilder();
-        for(int i = 0;i < ACC_NAMES.length;i++) {
-            if( (m & 1) != 0 ) {
-                buf.append(' ').append(ACC_NAMES[i]);
-            }
-            m >>= 1;
-        }
-        return buf.substring(1);
-    }
-
-
-    /**
-     * Get the bit-mask for a given access modifier description
-     * 
-     * @param s
-     *            the description
-     * @return the bit mask
-     */
-    public static int accessCode(String s) {
-        s = s.trim();
-        if( s.equals("") ) return 0;
-        int i = 0;
-        String[] sp = s.split("\\s+");
-        for(String l:sp) {
-            Integer m = ACC_MASKS.get(l);
-            if( m == null )
-                throw new IllegalArgumentException(
-                        "Unknown access modifier: \"" + l + "\" in \"" + s
-                                + "\"");
-            i += m.intValue();
-        }
-        return i;
-    }
-
 
     /** Class access modifier */
     private int access_;
@@ -223,6 +84,12 @@ public class ClassBuilder {
     /** Super class */
     private final ConstantClass superClass_;
 
+    /**
+     * Super class Class, lazily initialised as we want to avoid trying to find
+     * resources on the class-path as long as possible
+     */
+    private Class<?> superClazz_;
+
     /** This class */
     private final ConstantClass thisClass_;
 
@@ -240,7 +107,8 @@ public class ClassBuilder {
         cp_ = new ConstantPool(this);
         version_ = data.get(Integer.class, "version",
                 Integer.valueOf(JAVA_VERSION_1_1)).intValue();
-        access_ = accessCode(data.get(String.class, "access", "")) | ACC_SUPER;
+        access_ = Access.accessCode(data.get(String.class, "access", ""))
+                | Access.ACC_SUPER;
 
         thisClass_ = new ConstantClass(cp_, data.getSafe(String.class, "name"));
         superClass_ = new ConstantClass(cp_, data.get(String.class, "super",
@@ -283,7 +151,7 @@ public class ClassBuilder {
         if( magic != 0xcafebabe )
             throw new IOException("CAFEBABE header bytes missing");
         version_ = IO.readS4(input);
-        cp_ = new ConstantPool(this,input);
+        cp_ = new ConstantPool(this, input);
 
         access_ = IO.readU2(input);
 
@@ -294,6 +162,7 @@ public class ClassBuilder {
         if( ci > 0 ) {
             superClass_ = cp_.validate(ci, ConstantClass.class);
         } else {
+            // must be java.lang.Object
             superClass_ = null;
         }
 
@@ -345,7 +214,7 @@ public class ClassBuilder {
      *            super class name
      */
     public ClassBuilder(int access, String className, String superName) {
-        access_ = access | ACC_SUPER;
+        access_ = access | Access.ACC_SUPER;
         cp_ = new ConstantPool(this);
         thisClass_ = new ConstantClass(cp_, className);
         superClass_ = new ConstantClass(cp_, superName);
@@ -404,7 +273,7 @@ public class ClassBuilder {
 
 
     public int getAccess() {
-        return access_ & ~ACC_SUPER;
+        return access_ & ~Access.ACC_SUPER;
     }
 
 
@@ -451,18 +320,65 @@ public class ClassBuilder {
 
 
     /**
-     * Get the named field
+     * Get the declared named field
+     * 
+     * @param name
+     *            the name of the field
+     * @return the field, or null
+     */
+    public Field getDeclaredField(String name) {
+        int id = cp_.getUtf8(name, false);
+        for(Field f:fields_) {
+            if( id == f.name_.getIndex() ) return f;
+        }
+
+        return null;
+    }
+
+
+    /**
+     * Get the matching method if it exists
+     * 
+     * @param name
+     *            method name
+     * @param type
+     *            method type
+     * @return the method, or null
+     */
+    public Method getDeclaredMethod(String name, String type) {
+        int nameId = cp_.getUtf8(name, false);
+        int typeId = cp_.getUtf8(type, false);
+        for(Method m:methods_) {
+            if( (nameId == m.getName().getIndex())
+                    && (typeId == m.getType().getIndex()) ) return m;
+        }
+        return null;
+    }
+
+
+    /**
+     * Get the named field, which may be inherited (Note: super class must be
+     * loadable)
      * 
      * @param name
      *            the name of the field
      * @return the field, or null
      */
     public Field getField(String name) {
-        int id = cp_.getUtf8(name, false);
-        for(Field f:fields_) {
-            if( id == f.name_.getIndex() ) return f;
-        }
-        return null;
+        Field f = getDeclaredField(name);
+        if( f != null ) return f;
+
+        if( superClass_ == null ) return null;
+        if( superClazz_ == null ) superClazz_ = superClass_.getActualClass();
+
+        String n = thisClass_.get().get();
+        String thisPack = n.substring(0, n.lastIndexOf('/') + 1);
+
+        n = superClass_.get().get();
+        String superPack = n.substring(0, n.lastIndexOf('/') + 1);
+
+        return Field.getInheritedField(cp_, name, superClazz_,
+                superPack.equals(thisPack));
     }
 
 
@@ -478,7 +394,8 @@ public class ClassBuilder {
 
 
     /**
-     * Get the matching method if it exists
+     * Get the matching method if it declared or is inherited. Note the super
+     * class must be loadable.
      * 
      * @param name
      *            method name
@@ -487,13 +404,20 @@ public class ClassBuilder {
      * @return the method, or null
      */
     public Method getMethod(String name, String type) {
-        int nameId = cp_.getUtf8(name, false);
-        int typeId = cp_.getUtf8(type, false);
-        for(Method m:methods_) {
-            if( (nameId == m.getName().getIndex())
-                    && (typeId == m.getType().getIndex()) ) return m;
-        }
-        return null;
+        Method m = getDeclaredMethod(name, type);
+        if( m != null ) return m;
+
+        if( superClass_ == null ) return null;
+        if( superClazz_ == null ) superClazz_ = superClass_.getActualClass();
+
+        String n = thisClass_.get().get();
+        String thisPack = n.substring(0, n.lastIndexOf('/') + 1);
+
+        n = superClass_.get().get();
+        String superPack = n.substring(0, n.lastIndexOf('/') + 1);
+
+        return Method.getInheritedMethod(this, name, type, superClazz_,
+                superPack.equals(thisPack));
     }
 
 
@@ -548,7 +472,7 @@ public class ClassBuilder {
      */
     public ClassData toClassData() {
         ClassData cd = new ClassData();
-        cd.put("access", accessCode(access_ & ~ACC_SUPER));
+        cd.put("access", Access.accessCode(access_ & ~Access.ACC_SUPER));
         cd.put("name", thisClass_.getClassName().get());
         cd.put("super", superClass_.getClassName().get());
         cd.put("version", Integer.valueOf(version_));

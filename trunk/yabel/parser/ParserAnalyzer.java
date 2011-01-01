@@ -1,23 +1,24 @@
 package yabel.parser;
 
-import yabel.code.Code;
-import yabel.code.Handler;
-
-
-import yabel.Method;
-
-
-import yabel.ClassBuilder;
-import yabel.OpCodes;
-import yabel.constants.ConstantPool;
-import yabel.constants.ConstantRef;
-import yabel.io.IO;
-
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.*;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.Stack;
+
+import yabel.Access;
+import yabel.Method;
+import yabel.OpCodes;
+import yabel.code.Code;
+import yabel.code.Handler;
+import yabel.constants.ConstantPool;
+import yabel.constants.ConstantRef;
+import yabel.io.IO;
 
 /**
  * Analyze a class and work out how many local variables and stack slots it
@@ -415,7 +416,7 @@ public class ParserAnalyzer implements ParserListener {
 
             int access = method.getAccess();
             // static methods do not have an initial object reference
-            maxLocalVars_ = (access & ClassBuilder.ACC_STATIC) != 0 ? 0 : 1;
+            maxLocalVars_ = (access & Access.ACC_STATIC) != 0 ? 0 : 1;
 
             // one local var per parameter
             maxLocalVars_ += Method.getArgsForType(method.getType().get());

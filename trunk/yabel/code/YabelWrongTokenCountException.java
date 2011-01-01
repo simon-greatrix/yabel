@@ -2,13 +2,15 @@ package yabel.code;
 
 import java.util.List;
 
+import yabel.YabelException;
+
 /**
  * Input to the compiler was invalid
  * 
  * @author Simon Greatrix
  * 
  */
-public class YabelWrongTokenCountException extends IllegalArgumentException {
+public class YabelWrongTokenCountException extends YabelException {
     /** serial version UID */
     private static final long serialVersionUID = 6445605414761921385L;
 

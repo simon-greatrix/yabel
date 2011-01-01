@@ -46,14 +46,11 @@ public class Code extends Attribute implements AttributeListListener {
     /** The actual characters we escape */
     private final static String ESCAPE_CHARS = "\b\t\n\f\r\"'\\";
 
-
     /** The characters used to represent escape sequences */
     private final static String ESCAPE_VALS = "btnfr\"'\\";
 
-
     /** Map of operand names to their compilers */
     private static Map<String, CodeOperand> OP_CODES = new HashMap<String, CodeOperand>();
-
 
     static {
         load(CodeArrays.values());
@@ -66,7 +63,8 @@ public class Code extends Attribute implements AttributeListListener {
         load(CodeSwitch.values());
         load(CodeU1U2.values());
         load(CodeLabel.values());
-        load(new CodeOperand[] { CodeIINC.INSTANCE, CodeLDC.INSTANCE, CodeVar.INSTANCE });
+        load(new CodeOperand[] { CodeIINC.INSTANCE, CodeLDC.INSTANCE,
+                CodeVar.INSTANCE });
     }
 
 
@@ -86,7 +84,11 @@ public class Code extends Attribute implements AttributeListListener {
 
     /**
      * Escape a string according to the rules of Java string escaping and append
-     * it onto the provided buffer.
+     * it onto the provided buffer. Characters that have special meaning in the
+     * source code are also escaped as follows: ' ' as \40 or , ':' as \72 or
+     * \u003a, '{' as \173 or \u007b, and '}' as \175 or \u007d. The comment
+     * slash-slash and slash-star patterns are all made safe by escaping the
+     * first character of the comment marker.
      * 
      * @param buf
      *            the buffer to append to.
@@ -103,9 +105,16 @@ public class Code extends Attribute implements AttributeListListener {
                 continue;
             }
 
+            // watch out for slash-slash and slash-star comments
+            boolean notComment = true;
+            int i1 = i + 1;
+            char ch2 = (i1 < val.length()) ? val.charAt(i1) : 'x';
+            if( ((ch == '/') && ((ch2 == '/') || (ch2 == '*')))
+                    || ((ch == '*' && ch2 == '/')) ) notComment = false;
+
             // handle regular characters
-            if( (ch > 0x20) && (ch < 0x7f) && (ch != ' ') && (ch != '{')
-                    && (ch != '}') && (ch != ':') ) {
+            if( notComment && (ch > 0x20) && (ch < 0x7f) && (ch != ' ')
+                    && (ch != '{') && (ch != '}') && (ch != ':') ) {
                 buf.append(ch);
                 continue;
             }
@@ -114,8 +123,7 @@ public class Code extends Attribute implements AttributeListListener {
             if( ch < 0xff ) {
                 // ensure the character following the octal escape is not an
                 // octal digit
-                int i1 = i + 1;
-                char ch2 = (i1 < val.length()) ? val.charAt(i1) : 'x';
+
                 if( (ch2 < '0') || ('7' < ch2) ) {
                     // handle special chars and normal octal escapes
                     buf.append('\\');
@@ -135,7 +143,9 @@ public class Code extends Attribute implements AttributeListListener {
             buf.append(Character.forDigit((ch >> 4) & 0xf, 16));
             buf.append(Character.forDigit(ch & 0xf, 16));
         }
+
     }
+
 
     /**
      * Get an integer.
@@ -161,6 +171,7 @@ public class Code extends Attribute implements AttributeListListener {
         }
     }
 
+
     /**
      * Is the field value a replacement? That is, does it start with a '{' and
      * end with a '}'?
@@ -177,11 +188,13 @@ public class Code extends Attribute implements AttributeListListener {
         return v.substring(1, l);
     }
 
+
     private static final void load(CodeOperand[] ops) {
         for(CodeOperand op:ops) {
             OP_CODES.put(op.name().toUpperCase(), op);
         }
     }
+
 
     /**
      * Decode a Java escape sequence.
@@ -275,6 +288,7 @@ public class Code extends Attribute implements AttributeListListener {
                 + ") in " + val);
     }
 
+
     /**
      * Un-escape a string which has been escaped using the rules of Java string
      * escaping.
@@ -288,6 +302,7 @@ public class Code extends Attribute implements AttributeListListener {
         unescapeJava(buf, val);
         return buf.toString();
     }
+
 
     /**
      * Un-escape a string which has been escaped using the rules of Java string
@@ -317,26 +332,20 @@ public class Code extends Attribute implements AttributeListListener {
     /** The constant pool associated with this */
     private final ConstantPool cp_;
 
-
     /** The exception handlers */
     private List<Handler> handler_ = new ArrayList<Handler>();
-
 
     /** History of this code's creation */
     private List<ClassData> history_ = new ArrayList<ClassData>();
 
-
     /** The local variables required */
     private int maxLocals_ = -1;
-
 
     /** The stack slots required */
     private int maxStack_ = -1;
 
-
     /** The method this code implements */
     private Method method_ = null;
-
 
     /** First pass compilation */
     private final CompilerOutput output_;
@@ -355,6 +364,7 @@ public class Code extends Attribute implements AttributeListListener {
         attrList_ = new AttributeList();
         attrList_.setOwner(this);
     }
+
 
     /**
      * New Code attribute from class data
@@ -499,7 +509,7 @@ public class Code extends Attribute implements AttributeListListener {
         ClassData cd = new ClassData();
         cd.put("bytes", IO.encode(code));
         history_.add(cd);
-        if( method_ !=null ) output_.appendCode(code);
+        if( method_ != null ) output_.appendCode(code);
     }
 
 
@@ -819,6 +829,7 @@ public class Code extends Attribute implements AttributeListListener {
         output_.reset();
     }
 
+
     /**
      * Set the byte code for this Code. Any existing code is discarded. Any
      * existing label markers are discarded. Exception handlers are retained.
@@ -838,7 +849,6 @@ public class Code extends Attribute implements AttributeListListener {
         history_.clear();
         appendCode(code);
     }
-
 
 
     public void setMaxLocals(int maxLocals) {
@@ -869,11 +879,11 @@ public class Code extends Attribute implements AttributeListListener {
         // prior to the method being set nothing was compiled
         List<ClassData> pend = new ArrayList<ClassData>(history_);
         history_.clear();
-        for(ClassData cd : pend) {
-            if( cd.containsKey("source") )
-                compile(cd.get(String.class,"source"), cd.get(ClassData.class,"replacements"));
+        for(ClassData cd:pend) {
+            if( cd.containsKey("source") ) compile(cd.get(String.class,
+                    "source"), cd.get(ClassData.class, "replacements"));
             else
-                appendCode(IO.decode(cd.get(String.class,"bytes")));
+                appendCode(IO.decode(cd.get(String.class, "bytes")));
         }
     }
 

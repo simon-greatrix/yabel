@@ -5,7 +5,7 @@ package yabel.parser.decomp;
  * 
  * @author Simon Greatrix
  */
-public class VarDef implements Source, Comparable<VarDef> {
+public class VarDef implements Source {
     /** The variable being defined. */
     private final Variable variable_;
 
@@ -30,6 +30,7 @@ public class VarDef implements Source, Comparable<VarDef> {
         variable_ = variable;
         loc_ = loc;
         name_ = name;
+        variable_.addDef(this);
     }
 
 
@@ -39,21 +40,13 @@ public class VarDef implements Source, Comparable<VarDef> {
      * @see yabel.parser.decomp.Source#source()
      */
     public String source() {
-        if( name_!=null ) return "$:" + variable_.index_ + ":" + name_;
-        return "$:"+variable_.index_;
+        if( name_ != null ) return "$:" + variable_.index_ + ":" + name_;
+        return "$:" + variable_.index_;
     }
 
 
-    /**
-     * {@inheritDoc}
-     * 
-     * @see java.lang.Comparable#compareTo(java.lang.Object)
-     */
-    @Override
-    public int compareTo(VarDef other) {
-        int diff = loc_ - other.loc_;
-        if( diff != 0 ) return diff;
-        diff = variable_.index_ - other.variable_.index_;
-        return diff;
+    /** {@inheritDoc} */
+    public String toString() {
+        return "VarDef[loc=" + loc_ + ", name=" + name_ + "]";
     }
 }

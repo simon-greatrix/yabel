@@ -83,7 +83,7 @@ public class ConstantString extends Constant {
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return value_.getIndex() ^ 8;
+        return value_.hashCode() ^ 8;
     }
 
 

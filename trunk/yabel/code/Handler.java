@@ -63,9 +63,9 @@ public class Handler {
         startPC_ = IO.readU2(input);
         endPC_ = IO.readU2(input);
         handlerPC_ = IO.readU2(input);
-        
+
         int type = IO.readU2(input);
-        if( type!=0 ) {
+        if( type != 0 ) {
             catchType_ = cp.validate(type, ConstantClass.class);
         } else {
             catchType_ = null;
@@ -95,12 +95,23 @@ public class Handler {
 
 
     /**
-     * Get the name of the catch type of this handler.
+     * Get the class of the catch type of this handler.
      * 
      * @return the catch type or null if this is a catch-all.
      */
     public ConstantClass getCatchType() {
         return catchType_;
+    }
+
+
+    /**
+     * Get the name of the catch type of this handler
+     * 
+     * @return the catch type or null if this is a catch-all.
+     */
+    public String getCatchTypeName() {
+        if( catchType_ == null ) return null;
+        return catchType_.getClassName().get();
     }
 
 
