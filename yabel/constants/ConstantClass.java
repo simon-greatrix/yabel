@@ -52,7 +52,7 @@ public class ConstantClass extends Constant {
      *            class name
      */
     public ConstantClass(ConstantPool cp, String name) {
-        this(cp,new ConstantUtf8(cp, name));
+        this(cp, new ConstantUtf8(cp, name));
     }
 
 
@@ -89,10 +89,31 @@ public class ConstantClass extends Constant {
     }
 
 
+    /**
+     * Get the actual class object represented by this constant
+     * 
+     * @return the class object
+     */
+    public Class<?> getActualClass() {
+        // NB class names do not have leading 'L' and trailing ';'
+        String name = name_.get();
+        name = name.replace('/', '.');
+        ClassLoader cl = Thread.currentThread().getContextClassLoader();
+        try {
+            // we only care about the definition of the class, so we do not
+            // initialize it
+            return Class.forName(name, false, cl);
+        } catch (ClassNotFoundException cnfe) {
+            throw new YabelConstantException("Class not accessible: " + name,
+                    cnfe);
+        }
+    }
+
+
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return name_.getIndex() ^ 7;
+        return name_.hashCode() ^ 7;
     }
 
 

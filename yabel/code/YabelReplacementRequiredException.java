@@ -2,13 +2,15 @@ package yabel.code;
 
 import java.util.List;
 
+import yabel.YabelException;
+
 /**
  * A replacement parameter was required.
  * 
  * @author Simon Greatrix
  * 
  */
-public class YabelReplacementRequiredException extends IllegalArgumentException {
+public class YabelReplacementRequiredException extends YabelException {
     /** serial version UID */
     private static final long serialVersionUID = -4743776845085640667L;
 

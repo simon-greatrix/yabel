@@ -153,7 +153,7 @@ public abstract class ConstantRef extends Constant {
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return (class_.getIndex() << 16) ^ type_.getIndex() ^ getTag();
+        return (class_.hashCode() << 16) ^ type_.hashCode() ^ getTag();
     }
 
 

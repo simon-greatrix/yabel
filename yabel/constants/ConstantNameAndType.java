@@ -99,7 +99,7 @@ class ConstantNameAndType extends Constant {
     /** {@inheritDoc} */
     @Override
     public int hashCode() {
-        return ((name_.getIndex() << 16) | type_.getIndex()) ^ 12;
+        return ((name_.hashCode() << 16) | type_.hashCode()) ^ 12;
     }
 
 

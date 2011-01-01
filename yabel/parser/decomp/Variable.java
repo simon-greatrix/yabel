@@ -1,7 +1,7 @@
 package yabel.parser.decomp;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /**
  * A defined variable in a code block.
@@ -13,7 +13,7 @@ public class Variable {
     private final VariableSet set_;
 
     /** The definitions of this variable */
-    private final List<VarDef> defs_ = new ArrayList<VarDef>();
+    private final SortedMap<Integer, VarDef> defs_ = new TreeMap<Integer, VarDef>();
 
     /** The index for this variable */
     final int index_;
@@ -30,6 +30,7 @@ public class Variable {
     Variable(VariableSet variableSet, int index) {
         set_ = variableSet;
         index_ = index;
+        new VarDef(this, -1, null);
     }
 
 
@@ -46,13 +47,22 @@ public class Variable {
      * @return the definition
      */
     VarDef getDef(int loc) {
-        VarDef r = null;
-        for(VarDef d:defs_) {
-            if( d.loc_ <= loc ) r = d;
-            else
-                break;
-        }
-        return r;
+        SortedMap<Integer, VarDef> m = defs_.headMap(Integer.valueOf(loc + 1));
+        Integer l = m.lastKey();
+        return defs_.get(l);
+    }
+
+
+    /**
+     * Get the source that defines this variable at the specified location, if
+     * any.
+     * 
+     * @param loc
+     *            the location
+     * @return the definition at the point, if any
+     */
+    VarDef getSource(Integer loc) {
+        return defs_.get(loc);
     }
 
 
@@ -63,6 +73,7 @@ public class Variable {
      *            the new definition
      */
     void addDef(VarDef def) {
-        defs_.add(def);
+        Integer loc = Integer.valueOf(def.loc_);
+        defs_.put(loc, def);
     }
 }
