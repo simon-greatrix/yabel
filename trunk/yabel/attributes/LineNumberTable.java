@@ -5,28 +5,27 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
-
 import java.util.Iterator;
+import java.util.List;
 
 import yabel.ClassData;
 import yabel.constants.ConstantPool;
 import yabel.io.IO;
-
 
 /**
  * The line number table attribute.
  * 
  * @author Simon Greatrix
  */
-public class LineNumberTable extends Attribute {
+public class LineNumberTable extends Attribute implements
+        Iterable<LineNumberTable.LNV> {
     /**
      * A line number value indicating the starting PC, the line number and the
      * number of preceding markers on the same line.
      * 
      * @author Simon Greatrix
      */
-    public static class LNV implements Comparable<LNV> {
+    public class LNV implements Comparable<LNV> {
         /** Number of entries that precede this and specify the same line */
         int count_ = 0;
 
@@ -91,6 +90,16 @@ public class LineNumberTable extends Attribute {
         }
 
 
+        /** {@inheritDoc} */
+        @Override
+        public boolean equals(Object obj) {
+            if( obj == null ) return false;
+            if( obj == this ) return true;
+            LineNumberTable.LNV other = (LineNumberTable.LNV) obj;
+            return (lineNum_ == other.lineNum_) && (startPC_ == other.startPC_);
+        }
+
+
         /**
          * Get the number of table entries that define the same line but precede
          * this one
@@ -122,6 +131,13 @@ public class LineNumberTable extends Attribute {
         }
 
 
+        /** {@inheritDoc} */
+        @Override
+        public int hashCode() {
+            return lineNum_ ^ startPC_;
+        }
+
+
         /**
          * Create the ClassData representation of this.
          * 
@@ -137,18 +153,18 @@ public class LineNumberTable extends Attribute {
 
         /**
          * Convert this to a String. The String will be of the form
-         * "__LINE_&lt;number&gt;" or "__LINE_&lt;number&gt;_&lt;count&gt;" and
-         * may be used as a label in the code.
+         * "LINE_&lt;number&gt;" or "LINE_&lt;number&gt;_&lt;count&gt;" and may
+         * be used as a label in the code.
          * 
          * @return this as a label
          */
+        @Override
         public String toString() {
-            if( count_ == 0 ) {
-                return String.format("__LINE_%d", Integer.valueOf(lineNum_));
-            }
+            Integer l = Integer.valueOf(lineNum_);
+            if( count_ == 0 ) return String.format("LINE_%d", l);
 
-            return String.format("__LINE_%d_%d", Integer.valueOf(lineNum_),
-                    Integer.valueOf(count_ + 1));
+            Integer c = Integer.valueOf(count_ + 1);
+            return String.format("LINE_%d_%d", l, c);
         }
 
 
@@ -167,24 +183,30 @@ public class LineNumberTable extends Attribute {
     /** The line number values in this table */
     private final List<LNV> lnvs_;
 
-    /** The list that owns this attribute */
-    private final AttributeList owner_;
+
+    /**
+     * Create new LineNumberTable attribute from ClassData
+     * 
+     * @param cp
+     *            the constant pool
+     */
+    public LineNumberTable(ConstantPool cp) {
+        super(cp, ATTR_LINE_NUMBER_TABLE);
+        lnvs_ = new ArrayList<LNV>();
+        resetCounts();
+    }
 
 
     /**
      * Create new LineNumberTable attribute from ClassData
      * 
-     * @param owner
-     *            the owning attribute list
      * @param cp
      *            the constant pool
      * @param cd
      *            the class data
      */
-    public LineNumberTable(AttributeList owner, ConstantPool cp, ClassData cd) {
+    public LineNumberTable(ConstantPool cp, ClassData cd) {
         super(cp, ATTR_LINE_NUMBER_TABLE);
-        owner_ = owner;
-
         List<ClassData> table = cd.getListSafe(ClassData.class, "table");
         int size = table.size();
         lnvs_ = new ArrayList<LNV>(size);
@@ -198,17 +220,13 @@ public class LineNumberTable extends Attribute {
     /**
      * Read new LineNumberTable attribute from a stream
      * 
-     * @param owner
-     *            the owning attribute list
      * @param cp
      *            the constant pool
      * @param in
      *            the stream
      */
-    public LineNumberTable(AttributeList owner, ConstantPool cp, InputStream in)
-            throws IOException {
+    public LineNumberTable(ConstantPool cp, InputStream in) throws IOException {
         super(cp, ATTR_LINE_NUMBER_TABLE);
-        owner_ = owner;
         int len = IO.readS4(in);
         int size = IO.readU2(in);
         if( size * 4 + 2 != len )
@@ -222,26 +240,6 @@ public class LineNumberTable extends Attribute {
     }
 
 
-    /** Reset the counts to ensure uniqueness */
-    private void resetCounts() {
-        if( lnvs_.isEmpty() ) return;
-
-        // reset the counts to ensure uniqueness
-        Collections.sort(lnvs_);
-        int prevLine = lnvs_.get(0).getLine() - 1;
-        int count = -1;
-        for(LNV v:lnvs_) {
-            if( v.getLine() != prevLine ) {
-                count = 0;
-                prevLine = v.getLine();
-            } else {
-                count++;
-            }
-            v.count_ = count;
-        }
-    }
-
-
     /**
      * Add an entry to this line number table
      * 
@@ -252,9 +250,31 @@ public class LineNumberTable extends Attribute {
      */
     public void add(int startPc, int lineNum) {
         LNV lnv = new LNV(startPc, lineNum);
-        lnvs_.add(lnv);
-        resetCounts();
-        owner_.update(this);
+        if( !lnvs_.contains(lnv) ) {
+            lnvs_.add(lnv);
+            resetCounts();
+        }
+    }
+
+
+    /**
+     * Is this table empty?
+     * 
+     * @return true if empty
+     */
+    public boolean isEmpty() {
+        return lnvs_.isEmpty();
+    }
+
+
+    /**
+     * {@inheritDoc}
+     * 
+     * @see java.lang.Iterable#iterator()
+     */
+    @Override
+    public Iterator<LNV> iterator() {
+        return lnvs_.iterator();
     }
 
 
@@ -279,11 +299,30 @@ public class LineNumberTable extends Attribute {
                 }
             }
         }
-        if( cnt>0 ) {
+        if( cnt > 0 ) {
             resetCounts();
-            owner_.update(this);
         }
         return cnt;
+    }
+
+
+    /** Reset the counts to ensure uniqueness */
+    private void resetCounts() {
+        if( lnvs_.isEmpty() ) return;
+
+        // reset the counts to ensure uniqueness
+        Collections.sort(lnvs_);
+        int prevLine = lnvs_.get(0).getLine() - 1;
+        int count = -1;
+        for(LNV v:lnvs_) {
+            if( v.getLine() != prevLine ) {
+                count = 0;
+                prevLine = v.getLine();
+            } else {
+                count++;
+            }
+            v.count_ = count;
+        }
     }
 
 

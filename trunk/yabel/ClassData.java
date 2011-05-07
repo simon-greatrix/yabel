@@ -272,7 +272,7 @@ public class ClassData extends LinkedHashMap<String, Object> {
 
 
     private Object putInternal(String key, Object value) {
-        if( key == null || key.equals("") )
+        if( (key == null) || key.equals("") )
             throw new AssertionError("Key must be specified and not empty");
         if( value != null ) {
             if( !((value instanceof String) || (value instanceof Number)

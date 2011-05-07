@@ -81,8 +81,8 @@ public class Access {
 
         Map<String, Integer> s2i = new HashMap<String, Integer>();
         int k = 1;
-        for(int j = 0;j < ACC_NAMES.length;j++) {
-            s2i.put(ACC_NAMES[j], Integer.valueOf(k));
+        for(String element:ACC_NAMES) {
+            s2i.put(element, Integer.valueOf(k));
             k *= 2;
         }
         ACC_MASKS = Collections.unmodifiableMap(s2i);
@@ -96,8 +96,8 @@ public class Access {
         int p = canon.length;
         for(int i = 0;i < ACC_ORDER.length;i++) {
             boolean matched = false;
-            for(int j = 0;j < ACC_ORDER.length;j++) {
-                if( ACC_ORDER[j] == v ) {
+            for(int element:ACC_ORDER) {
+                if( element == v ) {
                     matched = true;
                     break;
                 }
@@ -121,8 +121,7 @@ public class Access {
     public static String accessCode(int m) {
         if( m == 0 ) return "";
         StringBuilder buf = new StringBuilder();
-        for(int i = 0;i < ACC_ORDER.length;i++) {
-            int v = ACC_ORDER[i];
+        for(int v:ACC_ORDER) {
             if( (m & v) != 0 ) {
                 buf.append(' ').append(ACC_NAMES[bit(v)]);
             }

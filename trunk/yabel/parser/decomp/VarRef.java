@@ -6,13 +6,13 @@ package yabel.parser.decomp;
  * @author Simon Greatrix
  */
 public class VarRef implements Source {
-    /** The variable this is associated with */
-    private final Variable variable_;
-
     /**
      * The location of this reference
      */
     final int loc_;
+
+    /** The variable this is associated with */
+    private final Variable variable_;
 
 
     /**

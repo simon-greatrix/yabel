@@ -8,17 +8,31 @@ import yabel.code.Handler;
  * @author Simon Greatrix
  */
 public class LabeledHandler {
-    /** Location where the handler starts applying */
-    private final Label.Ref startPC_;
-
     /** Location where the handler stops applying */
     private final Label.Ref endPC_;
 
     /** Location of the handler */
     private final Label.Ref handlerPC_;
 
+    /** Location where the handler starts applying */
+    private final Label.Ref startPC_;
+
     /** The handler's catch type */
     private final String type_;
+
+
+    /**
+     * Create new labeled handler
+     * 
+     * @param labels
+     *            the label list associated with the code block
+     * @param handler
+     *            the handler
+     */
+    public LabeledHandler(LabelList labels, Handler handler) {
+        this(labels, handler.getStartPC(), handler.getEndPC(),
+                handler.getHandlerPC(), handler.getCatchTypeName());
+    }
 
 
     /**
@@ -41,20 +55,6 @@ public class LabeledHandler {
         endPC_ = labels.getRef(endPC);
         handlerPC_ = labels.getRef(handlerPC);
         type_ = type;
-    }
-
-
-    /**
-     * Create new labeled handler
-     * 
-     * @param labels
-     *            the label list associated with the code block
-     * @param handler
-     *            the handler
-     */
-    public LabeledHandler(LabelList labels, Handler handler) {
-        this(labels, handler.getStartPC(), handler.getEndPC(),
-                handler.getHandlerPC(), handler.getCatchTypeName());
     }
 
 

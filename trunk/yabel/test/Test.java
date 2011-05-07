@@ -21,17 +21,24 @@ import yabel.io.XMLDataReader;
 public class Test {
     
     static void checkBytes(byte[] original, byte[] compiled) {
+        
+      //  bytes will differ as attributes may be missing, in a different order, or have the same meaning but a different specification
+        
         int len = Math.min(original.length, compiled.length);
         int diff=-100;
+        StringBuilder buf = new StringBuilder();
+        buf.append("LENGTH: original=" + original.length + ", compiled=" + compiled.length);
         for(int i = 0;i < len;i++) {
             if( ClassBuilder.DEBUG ) {
-                System.out.format("%5d : %02x , %02x %s\n", Integer.valueOf(i-14),
+                buf.append(String.format("%5d : %02x , %02x %s\n", Integer.valueOf(i-14),
                         Integer.valueOf(0xff & original[i]), Integer.valueOf(0xff & compiled[i]),
-                        original[i]==compiled[i] ? "" : "****" );
+                        original[i]==compiled[i] ? "" : "****" ));
             }
             if( original[i] != compiled[i] ) diff=i-14;
         }
-        if ( diff!=-100 ) throw new Error("Compiled code differs at byte "+diff);
+        if ( diff!=-100 ) {
+            throw new Error(buf.toString());
+        }
         if( original.length != compiled.length ) {
             throw new Error("Compiled code length differs (original="
                     + original.length + ", compiled=" + compiled.length);
@@ -51,16 +58,12 @@ public class Test {
         byte[] original = baos.toByteArray();
 
         baos.reset();
-        code.reset();
-        code.compile(dna.get(String.class,"source"), dna.get(ClassData.class,"data"));
-        List<ClassData> la = dna.getList(ClassData.class,"handlers");
-        for(ClassData da:la) {
-            code.addHandler(da.get(String.class,"start"), da.get(String.class,"end"),
-                    da.get(String.class,"handler"), da.get(String.class,"type"));
-        }
-        code.writeTo(baos);
+        
+        Code code2 = new Code(m.getConstantPool(),dna);
+        code2.setOwner(cls, m);
+        code2.writeTo(baos);
         byte[] compiled = baos.toByteArray();
-// System.out.println(cls.getConstantPool());
+
         checkBytes(original,compiled);
     }
     

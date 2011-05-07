@@ -9,14 +9,14 @@ import java.util.TreeMap;
  * @author Simon Greatrix
  */
 public class Variable {
-    /** The set for the code block */
-    private final VariableSet set_;
-
     /** The definitions of this variable */
     private final SortedMap<Integer, VarDef> defs_ = new TreeMap<Integer, VarDef>();
 
     /** The index for this variable */
     final int index_;
+
+    /** The set for the code block */
+    private final VariableSet set_;
 
 
     /**
@@ -34,8 +34,15 @@ public class Variable {
     }
 
 
-    VariableSet getSet() {
-        return set_;
+    /**
+     * Add a definition for this variable
+     * 
+     * @param def
+     *            the new definition
+     */
+    void addDef(VarDef def) {
+        Integer loc = Integer.valueOf(def.loc_);
+        defs_.put(loc, def);
     }
 
 
@@ -53,6 +60,11 @@ public class Variable {
     }
 
 
+    VariableSet getSet() {
+        return set_;
+    }
+
+
     /**
      * Get the source that defines this variable at the specified location, if
      * any.
@@ -63,17 +75,5 @@ public class Variable {
      */
     VarDef getSource(Integer loc) {
         return defs_.get(loc);
-    }
-
-
-    /**
-     * Add a definition for this variable
-     * 
-     * @param def
-     *            the new definition
-     */
-    void addDef(VarDef def) {
-        Integer loc = Integer.valueOf(def.loc_);
-        defs_.put(loc, def);
     }
 }

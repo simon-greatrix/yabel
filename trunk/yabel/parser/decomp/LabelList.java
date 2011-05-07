@@ -1,5 +1,7 @@
 package yabel.parser.decomp;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -14,38 +16,30 @@ public class LabelList {
 
 
     /**
-     * Get a 2-byte label reference
+     * Get all the labels
      * 
-     * @param pos
-     *            the position pointed to by the label
-     * @return the label reference
+     * @return the labels
      */
-    public Label.Ref getRef(int pos) {
-        Integer ipos = Integer.valueOf(pos);
-        Label lbl = labels_.get(ipos);
-        if( lbl == null ) {
-            lbl = new Label(ipos);
-            labels_.put(ipos, lbl);
-        }
-        return lbl.getRef();
+    public Collection<Label> getAllLabels() {
+        return Collections.unmodifiableCollection(labels_.values());
     }
 
 
     /**
-     * Get a 4-byte label reference
+     * Get or create a label at the specified position.
      * 
      * @param pos
-     *            the position pointed to by the label
-     * @return the label reference
+     *            the label's position
+     * @return the label
      */
-    public Label.Ref4 getRef4(int pos) {
+    public Label createLabel(int pos) {
         Integer ipos = Integer.valueOf(pos);
         Label lbl = labels_.get(ipos);
         if( lbl == null ) {
             lbl = new Label(ipos);
             labels_.put(ipos, lbl);
         }
-        return lbl.getRef4();
+        return lbl;
     }
 
 
@@ -59,5 +53,31 @@ public class LabelList {
     public Label getLabel(int pos) {
         Integer ipos = Integer.valueOf(pos);
         return labels_.get(ipos);
+    }
+
+
+    /**
+     * Get a 2-byte label reference
+     * 
+     * @param pos
+     *            the position pointed to by the label
+     * @return the label reference
+     */
+    public Label.Ref getRef(int pos) {
+        Label lbl = createLabel(pos);
+        return lbl.getRef();
+    }
+
+
+    /**
+     * Get a 4-byte label reference
+     * 
+     * @param pos
+     *            the position pointed to by the label
+     * @return the label reference
+     */
+    public Label.Ref4 getRef4(int pos) {
+        Label lbl = createLabel(pos);
+        return lbl.getRef4();
     }
 }

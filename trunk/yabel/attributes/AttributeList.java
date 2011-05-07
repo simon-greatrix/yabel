@@ -67,6 +67,23 @@ public class AttributeList {
 
 
     /**
+     * Add an attribute into this list. Having multiple attributes of the same type
+     * may not be a good idea.
+     * 
+     * @param attr
+     *            the attribute
+     */
+    public void add(Attribute attr) {
+        if( attr == null ) return;
+        attrs_.remove(attr);
+        attrs_.add(attr);
+        notifyListChange();
+        if( owner_ != null )
+            owner_.attributeChanged(attr.getAttrId().get(), attr);
+    }
+
+
+    /**
      * Get a named attribute from this list.
      * 
      * @param cp
@@ -130,6 +147,16 @@ public class AttributeList {
 
 
     /**
+     * Notify contained attributes of a change in the list
+     */
+    protected void notifyListChange() {
+        for(Attribute attr:attrs_) {
+            attr.listChanged(this);
+        }
+    }
+
+
+    /**
      * Read an attribute from class data
      * 
      * @param cp
@@ -152,7 +179,7 @@ public class AttributeList {
         if( idName.equals(Attribute.ATTR_SOURCE_FILE) )
             return new SourceFileAttribute(cp, input);
         if( idName.equals(Attribute.ATTR_LINE_NUMBER_TABLE) )
-            return new LineNumberTable(this, cp, input);
+            return new LineNumberTable(cp, input);
         // TODO if( idName.equals(ATTR_LOCAL_VARIABLE_TABLE) )
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
             return new MarkerAttribute(cp, input);
@@ -186,12 +213,27 @@ public class AttributeList {
         if( idName.equals(Attribute.ATTR_SOURCE_FILE) )
             return new SourceFileAttribute(cp, input);
         if( idName.equals(Attribute.ATTR_LINE_NUMBER_TABLE) )
-            return new LineNumberTable(this, cp, input);
+            return new LineNumberTable(cp, input);
         // TODO if( idName.equals(ATTR_LOCAL_VARIABLE_TABLE) )
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
             return new MarkerAttribute(cp, idName, input);
 
         return new GenericAttribute(cp, id, input);
+    }
+
+
+    /**
+     * Remove an attribute from this list. Note that the attribute's name
+     * remains in the constant pool.
+     * 
+     * @param attr
+     *            the attribute to remove
+     * @return true if equivalent attribute was found and removed
+     */
+    public boolean remove(Attribute attr) {
+        boolean rem = attrs_.remove(attr);
+        if( rem ) notifyListChange();
+        return rem;
     }
 
 
@@ -212,15 +254,17 @@ public class AttributeList {
             if( a.getAttrId().getIndex() == index ) {
                 attrs_.remove(i);
                 if( owner_ != null ) owner_.attributeChanged(name, null);
+                notifyListChange();
                 return true;
             }
         }
         return false;
     }
-    
+
 
     /**
-     * Set an attribute into this list.
+     * Set an attribute into this list, replacing any existing attribute of this
+     * type.
      * 
      * @param attr
      *            the attribute
@@ -238,6 +282,7 @@ public class AttributeList {
             }
         }
         if( !found ) attrs_.add(attr);
+        notifyListChange();
         if( owner_ != null )
             owner_.attributeChanged(attr.getAttrId().get(), attr);
     }
