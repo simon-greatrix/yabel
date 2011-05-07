@@ -6,14 +6,14 @@ package yabel.parser.decomp;
  * @author Simon Greatrix
  */
 public class VarDef implements Source {
-    /** The variable being defined. */
-    private final Variable variable_;
-
     /** Location of this definition */
     final int loc_;
 
     /** Name defined for this variable */
     String name_;
+
+    /** The variable being defined. */
+    private final Variable variable_;
 
 
     /**

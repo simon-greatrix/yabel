@@ -3,6 +3,7 @@ package yabel.parser;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -10,6 +11,9 @@ import java.util.Map.Entry;
 import yabel.ClassData;
 import yabel.OpCodes;
 import yabel.SwitchData;
+import yabel.attributes.Attribute;
+import yabel.attributes.LineNumberTable;
+import yabel.attributes.LineNumberTable.LNV;
 import yabel.code.Code;
 import yabel.code.Handler;
 import yabel.constants.Constant;
@@ -66,11 +70,11 @@ public class Decompiler implements ParserListener {
      * @author Simon Greatrix
      */
     public static class Options {
-        /** Are constants explicit or in the class data? */
-        public boolean constInData = false;
-
         /** Are classes explicit or in the class data? */
         public boolean classInData = false;
+
+        /** Are constants explicit or in the class data? */
+        public boolean constInData = false;
 
         /** Are fields explicit or in the class data? */
         public boolean fieldInData = false;
@@ -93,7 +97,12 @@ public class Decompiler implements ParserListener {
     /**
      * Configuration data associated with the decompiled code
      */
-    private final ClassData cd_ = new ClassData();
+    private final ClassData replacements_ = new ClassData();
+
+    /**
+     * Class data containing source and replacements
+     */
+    private final ClassData build_ = new ClassData();
 
     /** The ConstantPool referenced by the code */
     private final ConstantPool cp_;
@@ -106,9 +115,6 @@ public class Decompiler implements ParserListener {
     /** Exception handlers associated with the code */
     private final List<LabeledHandler> handlers_ = new ArrayList<LabeledHandler>();
 
-    /** Switches in the code */
-    private final Map<String, LabelSwitch> switches_ = new HashMap<String, LabelSwitch>();
-
     /** Labels generated for the decompiled code */
     private final LabelList labels_ = new LabelList();
 
@@ -118,9 +124,14 @@ public class Decompiler implements ParserListener {
     /** The de-compilation result */
     private final ClassData result_ = new ClassData();
 
+    /** Switches in the code */
+    private final Map<String, LabelSwitch> switches_ = new HashMap<String, LabelSwitch>();
+
     /** Set of variables for the code block */
     private final VariableSet varSet_ = new VariableSet();
 
+    /** Line numbers in this code block */
+    private final LineNumberTable lineNumbers_;
 
     /**
      * New decompiler for a given constant pool
@@ -130,8 +141,14 @@ public class Decompiler implements ParserListener {
      */
     public Decompiler(ConstantPool cp) {
         cp_ = cp;
-        result_.put("data", cd_);
+        lineNumbers_ = new LineNumberTable(cp);
+        List<ClassData> buildList = new ArrayList<ClassData>(1);
+        buildList.add(build_);
+        build_.put("replacements",replacements_);
+        result_.put("name",Attribute.ATTR_CODE);
+        result_.putList(ClassData.class,"build",buildList);
         result_.putList(ClassData.class, "handlers", new ArrayList<ClassData>());
+        result_.putList(ClassData.class, "attributes", new ArrayList<ClassData>(2));
     }
 
 
@@ -143,7 +160,30 @@ public class Decompiler implements ParserListener {
      *            the exception handler
      */
     public void addHandler(Handler h) {
-        handlers_.add(new LabeledHandler(labels_,h));
+        handlers_.add(new LabeledHandler(labels_, h));
+    }
+
+
+    /**
+     * Add a table of line numbers to the code
+     * 
+     * @param table
+     *            the line numbers
+     */
+    public void addLineNumbers(LineNumberTable table) {
+        for(LNV lnv:lineNumbers_) {
+            Label l = labels_.getLabel(lnv.getStartPC());
+            if( l!=null ) l.removeName(lnv.toString());
+        }
+        
+        for(LNV lnv:table) {
+            lineNumbers_.add(lnv.getStartPC(),lnv.getLine());
+        }
+        
+        for(LNV lnv:lineNumbers_) {
+            Label l = labels_.createLabel(lnv.getStartPC());
+            l.setDefaultName(lnv.toString());
+        }
     }
 
 
@@ -158,10 +198,10 @@ public class Decompiler implements ParserListener {
     private String classToData(int v) {
         if( options_.classInData ) {
             String cNm = String.format("class%04x", Integer.valueOf(v));
-            if( cd_.containsKey(cNm) ) return cNm;
+            if( replacements_.containsKey(cNm) ) return cNm;
             ConstantClass conCls = cp_.validate(v, ConstantClass.class);
             String n = conCls.getClassName().get();
-            cd_.put(cNm, Code.escapeJava(n));
+            replacements_.put(cNm, Code.escapeJava(n));
             return "{" + cNm + "}";
         }
 
@@ -365,15 +405,15 @@ public class Decompiler implements ParserListener {
         if( con instanceof ConstantNumber ) {
             // Constant is a number type, so can use a numeric lookup
             Number n = ((ConstantNumber) con).getValue();
-            cd_.put(nm, n);
+            replacements_.put(nm, n);
         } else if( con instanceof ConstantString ) {
             // strings are simple
             String v = ((ConstantString) con).getValue().get();
-            cd_.put(nm, Code.escapeJava(v));
+            replacements_.put(nm, Code.escapeJava(v));
         } else if( con instanceof ConstantClass ) {
             // classes must have an explicit type
             String v = ((ConstantClass) con).getClassName().get();
-            cd_.put(nm, Code.escapeJava(v));
+            replacements_.put(nm, Code.escapeJava(v));
             ret = new Multi("LDC", "class", "{" + nm + "}");
         } else {
             // other types not handled
@@ -492,7 +532,7 @@ public class Decompiler implements ParserListener {
         // we can finalise the label now so we can copy the switch data.
         for(Entry<String, LabelSwitch> e:switches_.entrySet()) {
             SwitchData sw = e.getValue().getData();
-            cd_.put(e.getKey(), sw);
+            replacements_.put(e.getKey(), sw);
         }
 
         StringBuilder buf = new StringBuilder();
@@ -505,7 +545,7 @@ public class Decompiler implements ParserListener {
             }
             List<VarDef> defs = varSet_.getDefs(opc.location_);
             if( !defs.isEmpty() ) {
-                for(VarDef v : defs) {                    
+                for(VarDef v:defs) {
                     buf.append("    ").append(v.source());
                 }
             }
@@ -519,18 +559,27 @@ public class Decompiler implements ParserListener {
 
         // decompile complete
         String src = buf.toString();
-        result_.put("source", src);
-        
+        build_.put("source", src);
+
         // add the exception handlers
         List<ClassData> handlers = result_.getList(ClassData.class, "handlers");
         handlers.clear();
-        for(LabeledHandler lh : handlers_) {
+        for(LabeledHandler lh:handlers_) {
             handlers.add(lh.toClassData());
         }
+
+        // attributes
+        List<ClassData> attrs = result_.getList(ClassData.class,"attributes");
+        Iterator<ClassData> iter = attrs.iterator();
+        while( iter.hasNext() ) {
+            ClassData cd = iter.next();
+            if( Attribute.ATTR_LINE_NUMBER_TABLE.equals(cd.get(String.class,"name")) ) {
+                iter.remove();
+            }
+        }
+        if(! lineNumbers_.isEmpty() ) attrs.add(lineNumbers_.toClassData());
         
-        // return result
-        cd_.sort();
-        result_.sort();
+        replacements_.sort();
         return result_;
     }
 
@@ -604,7 +653,7 @@ public class Decompiler implements ParserListener {
     public void parse(byte[] code) {
         Parser parser = new Parser(this);
         decomp_.clear();
-        cd_.clear();
+        replacements_.clear();
         for(int i = 0;i < code.length;i++) {
             parser.parse(code[i]);
         }
@@ -629,7 +678,7 @@ public class Decompiler implements ParserListener {
         String pNm = null;
         if( inData ) {
             pNm = String.format(prefix + "%04x", Integer.valueOf(v));
-            if( cd_.containsKey(pNm) ) return "{" + pNm + "}";
+            if( replacements_.containsKey(pNm) ) return "{" + pNm + "}";
         }
 
         // get the class, name and type of the referent
@@ -645,7 +694,7 @@ public class Decompiler implements ParserListener {
             sa.add(cls);
             sa.add(name);
             sa.add(type);
-            cd_.putList(String.class, pNm, sa);
+            replacements_.putList(String.class, pNm, sa);
         } else {
             // return explicit specification if not declared in this class
             StringBuilder buf = new StringBuilder();
@@ -654,9 +703,11 @@ public class Decompiler implements ParserListener {
             } else {
                 // in this class, but if it is inherited give full specification
                 if( "field".equals(prefix) ) {
-                    if( cp_.getOwner().getDeclaredField(name) == null ) required = 3;
+                    if( cp_.getOwner().getDeclaredField(name) == null )
+                        required = 3;
                 } else if( "method".equals(prefix) ) {
-                    if( cp_.getOwner().getDeclaredMethod(name,type) == null ) required = 3;                    
+                    if( cp_.getOwner().getDeclaredMethod(name, type) == null )
+                        required = 3;
                 }
             }
             if( required == 3 ) buf.append(cls).append(':');
@@ -672,5 +723,4 @@ public class Decompiler implements ParserListener {
     public void setOptions(Options options) {
         options_ = options;
     }
-
 }

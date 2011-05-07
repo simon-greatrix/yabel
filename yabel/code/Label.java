@@ -1,6 +1,5 @@
 package yabel.code;
 
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -10,12 +9,9 @@ import java.util.List;
  * @author Simon Greatrix
  * 
  */
-class Label {
+class Label extends Location {
     /** ID of this label */
     final String id_;
-
-    /** Location of this label */
-    int location_ = -1;
 
     /** Places where this label is used */
     List<LabelUse> usage_ = new ArrayList<LabelUse>();
@@ -48,5 +44,21 @@ class Label {
     @Override
     public int hashCode() {
         return id_.hashCode();
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    void requirePlaced() {
+        if( location_ == -1 )
+            throw new YabelLabelException("Label \"" + id_
+                    + "\" is not located");
+    }
+    
+    
+    /** {@inheritDoc} */
+    @Override
+    Object getIdentifier() {
+        return id_;
     }
 }

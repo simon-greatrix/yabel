@@ -103,20 +103,6 @@ public class LabelSwitch implements Iterable<Entry<Integer, Ref4>>, Source {
 
 
     /**
-     * Get the switch data that can be used to recreate this switch statement
-     * 
-     * @return the switch data
-     */
-    public SwitchData getData() {
-        SwitchData sw = new SwitchData(dflt_.getName());
-        for(Entry<Integer, Ref4> e:this) {
-            sw.add(e.getKey(), e.getValue().getName());
-        }
-        return sw;
-    }
-
-
-    /**
      * Add a case to this switch statement
      * 
      * @param cse
@@ -168,6 +154,20 @@ public class LabelSwitch implements Iterable<Entry<Integer, Ref4>>, Source {
      */
     public Ref4 get(Integer i) {
         return data_.get(i);
+    }
+
+
+    /**
+     * Get the switch data that can be used to recreate this switch statement
+     * 
+     * @return the switch data
+     */
+    public SwitchData getData() {
+        SwitchData sw = new SwitchData(dflt_.getName());
+        for(Entry<Integer, Ref4> e:this) {
+            sw.add(e.getKey(), e.getValue().getName());
+        }
+        return sw;
     }
 
 

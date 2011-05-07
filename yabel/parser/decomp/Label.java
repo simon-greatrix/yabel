@@ -1,5 +1,9 @@
 package yabel.parser.decomp;
 
+import java.util.Collections;
+import java.util.SortedSet;
+import java.util.TreeSet;
+
 /**
  * A label in a code block
  * 
@@ -13,12 +17,12 @@ public class Label implements Source {
      */
     public class Ref implements Source {
         /**
-         * Get this label's name
+         * Get the name of the label referenced by this
          * 
-         * @return the name
+         * @return the label's name
          */
         public String getName() {
-            return name_;
+            return Label.this.getName();
         }
 
 
@@ -29,7 +33,7 @@ public class Label implements Source {
          */
         @Override
         public String source() {
-            return "#:" + name_;
+            return "#:" + getName();
         }
     }
 
@@ -48,21 +52,24 @@ public class Label implements Source {
          */
         @Override
         public String source() {
-            return "#4:" + name_;
+            return "#4:" + getName();
         }
     }
 
     /** Label's name */
-    String name_;
+    private String defaultName_;
+
+    /** Alternative names for this label */
+    private SortedSet<String> names_ = new TreeSet<String>();
 
     /** Position of this label */
-    private Integer pos_;
+    private final Integer pos_;
 
     /** The reference to this label */
-    private Ref ref_;
+    private final Ref ref_;
 
     /** The reference to this label */
-    private Ref4 ref4_;
+    private final Ref4 ref4_;
 
 
     /**
@@ -73,9 +80,62 @@ public class Label implements Source {
      */
     public Label(Integer pos) {
         pos_ = pos;
-        name_ = String.format("lbl%04x", pos_);
+        defaultName_ = null;
         ref_ = new Ref();
         ref4_ = new Ref4();
+    }
+
+
+    /**
+     * Set the name of this label
+     * 
+     * @param name
+     *            the new name
+     */
+    public void addName(String name) {
+        if( name==null ) return;
+        names_.add(name);
+    }
+
+
+    /**
+     * Remove a name from this label
+     * 
+     * @param name
+     *            the name to remove
+     */
+    public void removeName(String name) {
+        if( name==null ) return;
+        names_.remove(name);
+        if( name.equals(defaultName_) ) defaultName_ = null;
+    }
+
+
+    /**
+     * Get this label's name
+     * 
+     * @return the name
+     */
+    public String getName() {
+        if( defaultName_ != null ) return defaultName_;
+        if( !names_.isEmpty() ) return names_.first();
+        return String.format("lbl%04x", pos_);
+    }
+
+
+    /**
+     * Get all of this label's name
+     * 
+     * @return the names
+     */
+    public SortedSet<String> getAllName() {
+        SortedSet<String> names = names_;
+        if( names_.isEmpty() ) {
+            String nm = String.format("lbl%04x", pos_);
+            names = new TreeSet<String>();
+            names.add(nm);
+        }
+        return Collections.unmodifiableSortedSet(names);
     }
 
 
@@ -100,17 +160,14 @@ public class Label implements Source {
 
 
     /**
-     * Set the name of this label
+     * Set the default name of this label
      * 
      * @param name
-     *            the new name
+     *            the default name
      */
-    public void setName(String name) {
-        if( name != null ) {
-            name_ = name;
-        } else {
-            name_ = String.format("lbl%04x", pos_);
-        }
+    public void setDefaultName(String name) {
+        names_.add(name);
+        defaultName_ = name;
     }
 
 
@@ -121,6 +178,12 @@ public class Label implements Source {
      */
     @Override
     public String source() {
-        return "@:" + name_;
+        if( names_.isEmpty() ) return "@:" + getName();
+
+        StringBuilder buf = new StringBuilder();
+        for(String n:names_) {
+            buf.append(" @:").append(n);
+        }
+        return buf.toString().substring(1);
     }
 }

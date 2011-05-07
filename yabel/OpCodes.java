@@ -783,7 +783,7 @@ public class OpCodes {
      */
     public static String getOpName(int i) {
         String r = null;
-        if( 0 <= i && i < OP_NAMES.length ) r = OP_NAMES[i];
+        if( (0 <= i) && (i < OP_NAMES.length) ) r = OP_NAMES[i];
         return (r == null) ? "<unknown>" : r;
 
     }

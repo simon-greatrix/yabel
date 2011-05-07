@@ -20,13 +20,13 @@ public class Handler {
     final ConstantClass catchType_;
 
     /** End processing instruction */
-    final int endPC_;
+    final Location endPC_;
 
     /** Handler processing instruction */
-    final int handlerPC_;
+    final Location handlerPC_;
 
     /** Start processing instruction */
-    final int startPC_;
+    final Location startPC_;
 
 
     /**
@@ -34,20 +34,30 @@ public class Handler {
      * 
      * @param cp
      *            the constant pool
+     * @param out
+     *            the CompilerOutput that knows where labels are located
      * @param cd
      *            class data representation
      */
-    public Handler(ConstantPool cp, ClassData cd) {
-        startPC_ = cd.getSafe(Integer.class, "startPC").intValue();
-        endPC_ = cd.getSafe(Integer.class, "endPC").intValue();
-        handlerPC_ = cd.getSafe(Integer.class, "handlerPC").intValue();
+    public Handler(ConstantPool cp, CompilerOutput out, ClassData cd) {
+        startPC_ = getLoc(out,cd,"start");
+        endPC_ = getLoc(out,cd,"end");
+        handlerPC_ = getLoc(out,cd,"handler");
 
-        String type = cd.get(String.class, "catchType");
+        String type = cd.get(String.class, "type");
         if( type == null ) {
             catchType_ = null;
         } else {
             catchType_ = new ConstantClass(cp, type);
         }
+    }
+    
+    
+    private static Location getLoc(CompilerOutput out, ClassData cd, String name) {
+        String id = cd.get(String.class,name);
+        if( id!=null ) return out.getLabel(id);
+        Integer loc = cd.getSafe(Integer.class, name);
+        return new Location(loc.intValue());
     }
 
 
@@ -60,9 +70,9 @@ public class Handler {
      *            stream
      */
     public Handler(ConstantPool cp, InputStream input) throws IOException {
-        startPC_ = IO.readU2(input);
-        endPC_ = IO.readU2(input);
-        handlerPC_ = IO.readU2(input);
+        startPC_ = new Location( IO.readU2(input) );
+        endPC_ = new Location( IO.readU2(input) );
+        handlerPC_ = new Location( IO.readU2(input) );
 
         int type = IO.readU2(input);
         if( type != 0 ) {
@@ -87,9 +97,9 @@ public class Handler {
      */
     public Handler(int startPC, int endPC, int handlerPC,
             ConstantClass catchType) {
-        startPC_ = startPC;
-        endPC_ = endPC;
-        handlerPC_ = handlerPC;
+        startPC_ = new Location(startPC);
+        endPC_ = new Location(endPC);
+        handlerPC_ = new Location(handlerPC);
         catchType_ = catchType;
     }
 
@@ -115,18 +125,39 @@ public class Handler {
     }
 
 
+    /**
+     * Get the end PC of this handler. If is is not set a YabelLabelException
+     * will be thrown
+     * 
+     * @return the end PC
+     */
     public int getEndPC() {
-        return endPC_;
+        endPC_.requirePlaced();
+        return endPC_.location_;
     }
 
 
+    /**
+     * Get the handler PC of this handler. If is is not set a
+     * YabelLabelException will be thrown
+     * 
+     * @return the handler PC
+     */
     public int getHandlerPC() {
-        return handlerPC_;
+        handlerPC_.requirePlaced();
+        return handlerPC_.location_;
     }
 
 
+    /**
+     * Get the start PC of this handler. If is is not set a YabelLabelException
+     * will be thrown
+     * 
+     * @return the start PC
+     */
     public int getStartPC() {
-        return startPC_;
+        startPC_.requirePlaced();
+        return startPC_.location_;
     }
 
 
@@ -139,13 +170,14 @@ public class Handler {
      */
     public ClassData toClassData(ConstantPool cp) {
         ClassData cd = new ClassData();
-        cd.put("endPC", Integer.valueOf(endPC_));
-        cd.put("startPC", Integer.valueOf(startPC_));
-        cd.put("handlerPC", Integer.valueOf(handlerPC_));
+        
+        cd.put("end", endPC_.getIdentifier());
+        cd.put("start", startPC_.getIdentifier());
+        cd.put("handler", handlerPC_.getIdentifier());
         if( catchType_ == null ) {
-            cd.put("catchType", null);
+            cd.put("type", null);
         } else {
-            cd.put("catchType", catchType_.getClassName().get());
+            cd.put("type", catchType_.getClassName().get());
         }
         return cd;
     }
@@ -158,13 +190,17 @@ public class Handler {
      *            output
      */
     public void writeTo(ByteArrayOutputStream baos) {
-        IO.writeU2(baos, startPC_);
-        IO.writeU2(baos, endPC_);
-        IO.writeU2(baos, handlerPC_);
+        startPC_.requirePlaced();
+        endPC_.requirePlaced();
+        handlerPC_.requirePlaced();
+        IO.writeU2(baos, startPC_.location_);
+        IO.writeU2(baos, endPC_.location_);
+        IO.writeU2(baos, handlerPC_.location_);
         if( catchType_ == null ) {
             IO.writeU2(baos, 0);
         } else {
             IO.writeU2(baos, catchType_.getIndex());
         }
     }
+
 }

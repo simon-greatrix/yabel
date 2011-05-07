@@ -1,5 +1,7 @@
 package yabel.code;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -59,8 +61,7 @@ public class CompilerOutput {
     private ConstantPool cp_;
 
     /**
-     * Labels in compiled code. First element of list is label target, rest are
-     * label references.
+     * Labels in compiled code.
      */
     private Map<String, Label> labels_ = new HashMap<String, Label>();
 
@@ -403,7 +404,7 @@ public class CompilerOutput {
 
 
     /**
-     * Get the label associated with a given name
+     * Get or create the label associated with a given name
      * 
      * @param name
      *            the label's name
@@ -474,7 +475,7 @@ public class CompilerOutput {
 
 
     /**
-     * Reset the output to being compilation from the beginning.
+     * Reset the output to begin compilation from the beginning.
      */
     public void reset() {
         code_ = null;
@@ -518,8 +519,18 @@ public class CompilerOutput {
         label.location_ = output_.size();
     }
 
-    
+
+    /**
+     * Get all the labels used in the compiled code.
+     * 
+     * @return all the labels
+     */
+    public Collection<Label> getAllLabels() {
+        return Collections.unmodifiableCollection(labels_.values());
+    }
+
+
     public void setVariable(int index, String name) {
-        // TODO
+    // TODO
     }
 }

@@ -4,10 +4,13 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import yabel.ClassBuilder;
 import yabel.ClassData;
@@ -16,6 +19,7 @@ import yabel.OpCodes;
 import yabel.attributes.Attribute;
 import yabel.attributes.AttributeList;
 import yabel.attributes.AttributeListListener;
+import yabel.attributes.LineNumberTable;
 import yabel.code.operand.CodeArrays;
 import yabel.code.operand.CodeClass;
 import yabel.code.operand.CodeConstant;
@@ -379,25 +383,32 @@ public class Code extends Attribute implements AttributeListListener {
         cp_ = cp;
         output_ = new CompilerOutput(cp_);
 
-        for(ClassData d:cd.getListSafe(ClassData.class, "build")) {
-            String bytes = d.get(String.class, "bytes");
-            if( bytes != null ) {
-                appendCode(IO.decode(bytes));
-            } else {
-                String raw = d.getSafe(String.class, "source");
-                ClassData d2 = d.get(ClassData.class, "replacements");
-                compile(raw, d2);
+        List<ClassData> list = cd.getList(ClassData.class, "build");
+        if( list != null ) {
+            for(ClassData d:list) {
+                String bytes = d.get(String.class, "bytes");
+                if( bytes != null ) {
+                    appendCode(IO.decode(bytes));
+                } else {
+                    String raw = d.getSafe(String.class, "source");
+                    ClassData d2 = d.get(ClassData.class, "replacements");
+                    compile(raw, d2);
+                }
             }
         }
 
-        for(ClassData d:cd.getListSafe(ClassData.class, "handlers")) {
-            addHandler(d);
+        //if handlers use labels as from decompiler, this errors
+        list = cd.getList(ClassData.class, "handlers");
+        if( list != null ) {
+            for(ClassData d:list) {
+                addHandler(d);
+            }
         }
 
-        maxLocals_ = cd.getSafe(Integer.class, "maxLocals").intValue();
-        maxStack_ = cd.getSafe(Integer.class, "maxStack").intValue();
+        maxLocals_ = cd.get(Integer.class, "maxLocals", Integer.valueOf(-1)).intValue();
+        maxStack_ = cd.get(Integer.class, "maxStack", Integer.valueOf(-1)).intValue();
 
-        attrList_ = new AttributeList(cp, cd.getListSafe(ClassData.class,
+        attrList_ = new AttributeList(cp, cd.getList(ClassData.class,
                 "attributes"));
         attrList_.setOwner(this);
     }
@@ -447,7 +458,7 @@ public class Code extends Attribute implements AttributeListListener {
      *            class data representation of handler
      */
     public void addHandler(ClassData handler) {
-        Handler h = new Handler(cp_, handler);
+        Handler h = new Handler(cp_, output_, handler);
         handler_.add(h);
     }
 
@@ -509,7 +520,10 @@ public class Code extends Attribute implements AttributeListListener {
         ClassData cd = new ClassData();
         cd.put("bytes", IO.encode(code));
         history_.add(cd);
-        if( method_ != null ) output_.appendCode(code);
+        if( method_ != null ) {
+            output_.restart();
+            output_.appendCode(code);
+        }
     }
 
 
@@ -765,15 +779,40 @@ public class Code extends Attribute implements AttributeListListener {
      * @return representation of the decompiled code.
      */
     public ClassData decompile() {
-        byte[] code = output_.finalizeCode();
+        byte[] code = getCodeInternal();
 
         Decompiler decomp = new Decompiler(cp_);
+        List<Attribute> lnt = attrList_.getAll(cp_,
+                Attribute.ATTR_LINE_NUMBER_TABLE);
+        for(Attribute a:lnt) {
+            decomp.addLineNumbers((LineNumberTable) a);
+        }
+
         decomp.parse(code);
         for(Handler h:handler_) {
             decomp.addHandler(h);
         }
 
         ClassData cd = decomp.finish();
+        
+        // we want to merge in the decompiler's attributes
+        List<ClassData> attrsDecomp = cd.getList(ClassData.class, "attributes");
+        List<ClassData> attrsSrc = attrList_.toClassData();
+        for(int i=0;i<attrsSrc.size();i++) {
+            ClassData a = attrsSrc.get(i);
+            String aName = a.getSafe(String.class,"name");
+            for(int j=0;j<attrsDecomp.size();j++) {
+                ClassData d = attrsDecomp.get(j);
+                String dName = d.getSafe(String.class,"name");
+                if( aName.equals(dName) ) {
+                    attrsSrc.set(i,d);
+                    attrsDecomp.remove(j);
+                    break;
+                }
+            }
+        }
+        attrsSrc.addAll(attrsDecomp);
+        cd.putList(ClassData.class,"attributes",attrsSrc);
         cd.sort();
         return cd;
     }
@@ -787,10 +826,54 @@ public class Code extends Attribute implements AttributeListListener {
      * @return the byte-code
      */
     public byte[] getCode() {
-        byte[] code = output_.finalizeCode();
+        byte[] code = getCodeInternal();
         byte[] newCode = new byte[code.length];
         System.arraycopy(code, 0, newCode, 0, code.length);
         return newCode;
+    }
+
+
+    /**
+     * Get the byte-code associated with this method. Note that once this has
+     * been called the byte-code is fixed unless a <code>reset()</code> is
+     * performed.
+     * 
+     * @return the byte-code
+     */
+    private byte[] getCodeInternal() {
+        byte[] code = output_.finalizeCode();
+
+        Pattern p = Pattern.compile("LINE_(\\d+)(_.*)?");
+        Collection<Label> lbls = output_.getAllLabels();
+        List<Attribute> attrs = attrList_.getAll(cp_,
+                Attribute.ATTR_LINE_NUMBER_TABLE);
+        LineNumberTable lnt = null;
+
+        for(Label lbl:lbls) {
+            if( lbl.location_ == -1 ) continue;
+
+            // is this a line number label?
+            Matcher m = p.matcher(lbl.id_);
+            if( m.matches() ) {
+                int posPC = lbl.location_;
+                int lineNum = Integer.parseInt(m.group(1));
+
+                if( lnt == null ) {
+                    // create LNT if it doesn't exist yet
+                    if( attrs.isEmpty() ) {
+                        attrList_.add(new LineNumberTable(cp_));
+                        attrs = attrList_.getAll(cp_,
+                                Attribute.ATTR_LINE_NUMBER_TABLE);
+                    }
+                    lnt = (LineNumberTable) attrs.get(0);
+                }
+
+                // add line number reference
+                lnt.add(posPC, lineNum);
+            }
+        }
+
+        return code;
     }
 
 
@@ -901,8 +984,9 @@ public class Code extends Attribute implements AttributeListListener {
             handlers.add(h.toClassData(cp_));
         }
         cd.putList(ClassData.class, "handlers", handlers);
-        cd.put("maxLocals", Integer.valueOf(maxLocals_));
-        cd.put("maxStack", Integer.valueOf(maxStack_));
+        if( maxLocals_ != -1 )
+            cd.put("maxLocals", Integer.valueOf(maxLocals_));
+        if( maxStack_ != -1 ) cd.put("maxStack", Integer.valueOf(maxStack_));
         cd.putList(ClassData.class, "attributes", attrList_.toClassData());
         return cd;
     }
@@ -916,7 +1000,7 @@ public class Code extends Attribute implements AttributeListListener {
      */
     @Override
     public void writeTo(ByteArrayOutputStream baos) {
-        byte code[] = output_.finalizeCode();
+        byte code[] = getCodeInternal();
 
         // first get the attribute size
         ByteArrayOutputStream attrs = new ByteArrayOutputStream();

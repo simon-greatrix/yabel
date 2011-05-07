@@ -11,7 +11,7 @@ public class Ops implements Source {
 
 
     /**
-     * Create new multi
+     * Create op code sequence
      * 
      * @param source
      *            the component sources
