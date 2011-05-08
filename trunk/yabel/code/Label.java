@@ -9,10 +9,7 @@ import java.util.List;
  * @author Simon Greatrix
  * 
  */
-class Label extends Location {
-    /** ID of this label */
-    final String id_;
-
+class Label extends NamedLocation {
     /** Places where this label is used */
     List<LabelUse> usage_ = new ArrayList<LabelUse>();
 
@@ -24,41 +21,15 @@ class Label extends Location {
      *            identifier of this label
      */
     Label(String id) {
-        id_ = id;
+        super(id);
     }
 
 
     /** {@inheritDoc} */
     @Override
-    public boolean equals(Object o) {
-        if( o == null ) return false;
-        if( o == this ) return true;
-        if( o instanceof Label ) {
-            return id_.equals(((Label) o).id_);
-        }
-        return false;
-    }
-
-
-    /** {@inheritDoc} */
-    @Override
-    public int hashCode() {
-        return id_.hashCode();
-    }
-
-
-    /** {@inheritDoc} */
-    @Override
-    void requirePlaced() {
-        if( location_ == -1 )
+    public void requirePlaced() {
+        if( ! isSet() )
             throw new YabelLabelException("Label \"" + id_
                     + "\" is not located");
-    }
-    
-    
-    /** {@inheritDoc} */
-    @Override
-    Object getIdentifier() {
-        return id_;
     }
 }

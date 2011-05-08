@@ -850,12 +850,12 @@ public class Code extends Attribute implements AttributeListListener {
         LineNumberTable lnt = null;
 
         for(Label lbl:lbls) {
-            if( lbl.location_ == -1 ) continue;
+            if( lbl.getLocation() == -1 ) continue;
 
             // is this a line number label?
             Matcher m = p.matcher(lbl.id_);
             if( m.matches() ) {
-                int posPC = lbl.location_;
+                int posPC = lbl.getLocation();
                 int lineNum = Integer.parseInt(m.group(1));
 
                 if( lnt == null ) {

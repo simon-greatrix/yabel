@@ -180,7 +180,8 @@ public class AttributeList {
             return new SourceFileAttribute(cp, input);
         if( idName.equals(Attribute.ATTR_LINE_NUMBER_TABLE) )
             return new LineNumberTable(cp, input);
-        // TODO if( idName.equals(ATTR_LOCAL_VARIABLE_TABLE) )
+        if( idName.equals(Attribute.ATTR_LOCAL_VARIABLE_TABLE) ) 
+            return new LocalVariableTable(cp,input);
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
             return new MarkerAttribute(cp, input);
 
@@ -214,7 +215,8 @@ public class AttributeList {
             return new SourceFileAttribute(cp, input);
         if( idName.equals(Attribute.ATTR_LINE_NUMBER_TABLE) )
             return new LineNumberTable(cp, input);
-        // TODO if( idName.equals(ATTR_LOCAL_VARIABLE_TABLE) )
+        if( idName.equals(Attribute.ATTR_LOCAL_VARIABLE_TABLE) )
+            return new LocalVariableTable(cp,input);
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
             return new MarkerAttribute(cp, idName, input);
 
