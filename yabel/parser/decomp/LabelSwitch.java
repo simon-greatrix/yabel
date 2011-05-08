@@ -238,10 +238,11 @@ public class LabelSwitch implements Iterable<Entry<Integer, Ref4>>, Source {
     @Override
     public String source() {
         StringBuilder buf = new StringBuilder();
-        buf.append(type_).append(':').append(dflt_.source());
+        String nl = "\n:";
+        buf.append(type_).append(nl).append(dflt_.getName());
         for(Entry<Integer, Ref4> e:this) {
-            buf.append(':').append(e.getKey()).append(':').append(
-                    e.getValue().source());
+            buf.append(nl).append(e.getKey()).append(':').append(
+                    e.getValue().getName());
         }
         return buf.toString();
     }

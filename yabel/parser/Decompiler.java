@@ -70,6 +70,9 @@ public class Decompiler implements ParserListener {
      * @author Simon Greatrix
      */
     public static class Options {
+        /** Include comments indicating location? */
+        public boolean locationComments = true;
+        
         /** Are classes explicit or in the class data? */
         public boolean classInData = false;
 
@@ -86,7 +89,7 @@ public class Decompiler implements ParserListener {
         public boolean methodInData = false;
 
         /** Are switch statements explicit or in the class data? */
-        public boolean switchInData = true;
+        public boolean switchInData = false;
     }
 
     /**
@@ -538,20 +541,31 @@ public class Decompiler implements ParserListener {
         StringBuilder buf = new StringBuilder();
         // Minimal pretty printing: labels are out-dented and there is a
         // blank line after a branch.
+        String prefix1, prefix2;
+        if( options_.locationComments ) {
+            prefix1 = "            ";
+        } else {
+            prefix1 = "";
+        }
+        
         for(Decompiler.OpCode opc:decomp_) {
+            
             Label lbl = labels_.getLabel(opc.location_);
             if( lbl != null ) {
-                buf.append(lbl.source()).append('\n');
+                buf.append(prefix1).append(lbl.source()).append('\n');
             }
             List<VarDef> defs = varSet_.getDefs(opc.location_);
             if( !defs.isEmpty() ) {
                 for(VarDef v:defs) {
-                    buf.append("    ").append(v.source());
+                    buf.append(prefix1).append("    ").append(v.source());
                 }
             }
-            buf.append("    ");
-            buf.append("/* ").append(opc.location_).append(" */ ");
-            buf.append(opc.opCode_.source()).append('\n');
+            String opSrc = opc.opCode_.source();
+            if( options_.locationComments ) {
+                buf.append(String.format("/* %5d */ ",Integer.valueOf(opc.location_)));
+                opSrc=opSrc.replaceAll("\n","\n        "+prefix1);
+            }
+            buf.append("    ").append(opSrc).append('\n');
             Byte b = Byte.valueOf(opc.code_);
             if( Parser.OP_EXIT.contains(b) || Parser.BRANCH_OPS.contains(b) )
                 buf.append('\n');
@@ -710,9 +724,10 @@ public class Decompiler implements ParserListener {
                         required = 3;
                 }
             }
-            if( required == 3 ) buf.append(cls).append(':');
+            String sep=(required>2)?"\n:":":";
+            if( required == 3 ) buf.append(cls).append(sep);
             buf.append(name);
-            if( required >= 2 ) buf.append(':').append(type);
+            if( required >= 2 ) buf.append(sep).append(type);
             pNm = buf.toString();
         }
 

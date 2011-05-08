@@ -1,8 +1,10 @@
 package yabel.code;
 
-import yabel.ClassData;
-
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+import yabel.ClassData;
 
 /**
  * Break the source code into a stream of expanded tokens. The source code is
@@ -15,6 +17,9 @@ import java.util.*;
  * 
  */
 public class CodeTokenizer implements Iterator<List<String>> {
+    
+    /** Match a token */
+    private static final Pattern TOKEN = Pattern.compile("\\s*(\\S+(\\s*:[^\\s:]*)*)");
 
     /** Internal sub-tokenizer state */
     private enum State {
@@ -45,17 +50,14 @@ public class CodeTokenizer implements Iterator<List<String>> {
         return v.substring(1, l);
     }
 
-    /** Position in source */
-    private int position_ = 0;
-
     /** Replacements to substitute in */
     private final ClassData replacements_;
 
     /** Unmodifiable view on returned list */
     private final List<String> ret_;
 
-    /** Source to tokenize */
-    private final String src_;
+    /** Matcher for tokens */
+    private final Matcher matcher_;
 
     /** Tokenizer for direct expansions */
     private final LinkedList<CodeTokenizer> subTokenizers_ = new LinkedList<CodeTokenizer>();
@@ -76,7 +78,7 @@ public class CodeTokenizer implements Iterator<List<String>> {
         // remove comments from source
         String s = src.replaceAll("/\\*.*?\\*/", " ");
         s = s.replaceAll("//.*?\n", "\n");
-        src_ = s;
+        matcher_ = TOKEN.matcher(s);
         replacements_ = replacements;
         ret_ = Collections.unmodifiableList(token_);
     }
@@ -192,27 +194,15 @@ public class CodeTokenizer implements Iterator<List<String>> {
         }
 
         token_.clear();
-
-        // skip initial whitespace
-        while( (position_ < src_.length())
-                && Character.isWhitespace(src_.charAt(position_)) ) {
-            position_++;
-        }
-
-        // if no characters left, no more tokens
-        if( position_ >= src_.length() ) return State.FINISHED;
-
-        // we have the start
-        int start = position_;
-        while( position_ < src_.length()
-                && !Character.isWhitespace(src_.charAt(position_)) ) {
-            position_++;
-        }
-
+        
+        // Attempt to find the next token
+        if( ! matcher_.find() ) return State.FINISHED;
+        
         // have raw token
-        String raw = src_.substring(start, position_);
+        String raw = matcher_.group(1);
         token_.add(raw);
-
+        raw = raw.replaceAll("\\s+:", ":");
+        
         // special case - if we just have {...} then we have to tokenize
         // the expansion
         int s = raw.indexOf('{');

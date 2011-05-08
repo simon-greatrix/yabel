@@ -4,14 +4,17 @@ package yabel.code;
  * 
  * @author Simon Greatrix
  */
-class Location {
+public class Location {
+    /** Location position used to indicate location is not yet set */
+    final static int UNSET = -1;
+    
     /** The location */
-    int location_;
+    private int location_;
 
 
     /** Create a location that is not yet defined */
     Location() {
-        location_ = -1;
+        location_ = UNSET;
     }
 
 
@@ -21,17 +24,8 @@ class Location {
      * @param location
      *            the location
      */
-    Location(int location) {
+    public Location(int location) {
         location_ = location;
-    }
-
-
-    /**
-     * Check this location is set, and throw a YabelLabelException if not.
-     */
-    void requirePlaced() {
-        if( location_ == -1 )
-            throw new YabelLabelException("Location is undefined");
     }
 
 
@@ -40,8 +34,57 @@ class Location {
      * 
      * @return an object that can identify this location
      */
-    Object getIdentifier() {
+    public Object getIdentifier() {
         requirePlaced();
         return Integer.valueOf(location_);
+    }
+
+
+    /**
+     * Get this locations byte code location, throwing a YabelLabelException if
+     * it is not set.
+     * 
+     * @return the location
+     */
+    public int getLocationSafe() {
+        requirePlaced();
+        return location_;
+    }
+
+
+    public int getLocation() {
+        return location_;
+    }
+
+
+    /**
+     * Check this location is set, and throw a YabelLabelException if not.
+     */
+    public void requirePlaced() {
+        if( !isSet() ) throw new YabelLabelException("Location is undefined");
+    }
+
+
+    public boolean isSet() {
+        return location_ != -1;
+    }
+
+
+    public void setLocation(int location) {
+        location_ = location;
+    }
+
+
+    /**
+     * This location
+     * 
+     * @return "Location[<i>location</i>]"
+     */
+    @Override
+    public String toString() {
+        if( ! isSet() ) {
+            return "Location[<unset>]";
+        }
+        return "Location[" + location_ + "]";
     }
 }

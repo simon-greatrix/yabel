@@ -208,7 +208,7 @@ public class CompilerOutput {
         // set labels
         for(Label lbl:labels_.values()) {
             for(LabelUse use:lbl.usage_) {
-                int jump = lbl.location_ - use.opLoc_;
+                int jump = lbl.getLocation() - use.opLoc_;
                 int here = use.location_;
                 if( use.width_ == 2 ) {
                     // verify 2 byte offset is possible
@@ -422,6 +422,29 @@ public class CompilerOutput {
 
 
     /**
+     * Resolve a location against this output. Absolute locations are unchanged.
+     * Named locations are only fixed when the output is complete.
+     * 
+     * @param location
+     *            the location - either a name of an address
+     * @return a resolved location
+     */
+    public Location resolve(Location location) {
+        // Labels are unchanged
+        if( location instanceof Label ) return location;
+        
+        // replace named locations with labels
+        if( location instanceof NamedLocation ) {
+            NamedLocation loc = (NamedLocation) location;
+            String name = loc.getName();
+            return getLabel(name);
+        }
+                
+        return location;
+    }
+
+
+    /**
      * Get a label's location by its name
      * 
      * @param lbl
@@ -433,7 +456,7 @@ public class CompilerOutput {
         if( li == null )
             throw new YabelLabelException("Label \"" + lbl
                     + "\" is not defined");
-        int loc = li.location_;
+        int loc = li.getLocation();
         if( loc == -1 )
             throw new YabelLabelException("Label \"" + lbl
                     + "\" is not located");
@@ -512,11 +535,11 @@ public class CompilerOutput {
      */
     public void setLabel(String name) {
         Label label = getLabel(name);
-        if( label.location_ != -1 ) {
+        if( label.getLocation() != -1 ) {
             throw new YabelLabelException("Label \"" + name
                     + "\" defined more than once");
         }
-        label.location_ = output_.size();
+        label.setLocation(output_.size());
     }
 
 
@@ -531,6 +554,6 @@ public class CompilerOutput {
 
 
     public void setVariable(int index, String name) {
-    // TODO
+        // TODO
     }
 }

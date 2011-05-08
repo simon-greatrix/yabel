@@ -36,9 +36,11 @@ public class Multi implements Source {
      */
     public String source() {
         StringBuilder buf = new StringBuilder();
+        String sep = ":";
+        if( source_.length > 3 ) sep="\n:";
         for(int i=0;i<source_.length;i++) {
             Source s = source_[i];
-            if( i>0 ) buf.append(':');
+            if( i>0 ) buf.append(sep);
             buf.append(s.source());
         }
         return buf.toString();

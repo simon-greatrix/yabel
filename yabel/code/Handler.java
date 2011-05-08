@@ -133,7 +133,7 @@ public class Handler {
      */
     public int getEndPC() {
         endPC_.requirePlaced();
-        return endPC_.location_;
+        return endPC_.getLocation();
     }
 
 
@@ -145,7 +145,7 @@ public class Handler {
      */
     public int getHandlerPC() {
         handlerPC_.requirePlaced();
-        return handlerPC_.location_;
+        return handlerPC_.getLocation();
     }
 
 
@@ -157,7 +157,7 @@ public class Handler {
      */
     public int getStartPC() {
         startPC_.requirePlaced();
-        return startPC_.location_;
+        return startPC_.getLocation();
     }
 
 
@@ -193,9 +193,9 @@ public class Handler {
         startPC_.requirePlaced();
         endPC_.requirePlaced();
         handlerPC_.requirePlaced();
-        IO.writeU2(baos, startPC_.location_);
-        IO.writeU2(baos, endPC_.location_);
-        IO.writeU2(baos, handlerPC_.location_);
+        IO.writeU2(baos, startPC_.getLocation());
+        IO.writeU2(baos, endPC_.getLocation());
+        IO.writeU2(baos, handlerPC_.getLocation());
         if( catchType_ == null ) {
             IO.writeU2(baos, 0);
         } else {
