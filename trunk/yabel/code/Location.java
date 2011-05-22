@@ -7,13 +7,13 @@ package yabel.code;
 public class Location {
     /** Location position used to indicate location is not yet set */
     final static int UNSET = -1;
-    
+
     /** The location */
     private int location_;
 
 
     /** Create a location that is not yet defined */
-    Location() {
+    public Location() {
         location_ = UNSET;
     }
 
@@ -40,6 +40,11 @@ public class Location {
     }
 
 
+    public int getLocation() {
+        return location_;
+    }
+
+
     /**
      * Get this locations byte code location, throwing a YabelLabelException if
      * it is not set.
@@ -52,8 +57,8 @@ public class Location {
     }
 
 
-    public int getLocation() {
-        return location_;
+    public boolean isSet() {
+        return location_ != -1;
     }
 
 
@@ -62,11 +67,6 @@ public class Location {
      */
     public void requirePlaced() {
         if( !isSet() ) throw new YabelLabelException("Location is undefined");
-    }
-
-
-    public boolean isSet() {
-        return location_ != -1;
     }
 
 
@@ -82,7 +82,7 @@ public class Location {
      */
     @Override
     public String toString() {
-        if( ! isSet() ) {
+        if( !isSet() ) {
             return "Location[<unset>]";
         }
         return "Location[" + location_ + "]";

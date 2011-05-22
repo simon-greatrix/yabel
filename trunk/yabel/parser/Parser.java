@@ -40,6 +40,8 @@ public class Parser {
         WIDE;
     }
 
+
+
     /**
      * Switch statement parsing
      * 
@@ -175,7 +177,7 @@ public class Parser {
         if( (debug != null) && !debug.equals("") ) {
             File f = new File(debug).getAbsoluteFile();
             File p = f.getParentFile();
-            if( (p!=null) && (!p.exists()) && (!p.mkdirs()) ) {
+            if( (p != null) && (!p.exists()) && (!p.mkdirs()) ) {
                 System.err.println("Cannot create debug folder "
                         + p.getAbsolutePath());
             } else {
@@ -452,7 +454,8 @@ public class Parser {
             break;
         case MAX:
         case MIN:
-            throw new AssertionError("Encountered state "+switchState_+" when parsing LOOKUPSWITCH");
+            throw new AssertionError("Encountered state " + switchState_
+                    + " when parsing LOOKUPSWITCH");
         }
     }
 
@@ -529,7 +532,8 @@ public class Parser {
             }
             break;
         case NPAIRS:
-            throw new AssertionError("Encountered state "+switchState_+" when parsing TABLESWITCH");
+            throw new AssertionError("Encountered state " + switchState_
+                    + " when parsing TABLESWITCH");
         }
     }
 }

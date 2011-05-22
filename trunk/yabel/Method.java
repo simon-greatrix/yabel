@@ -165,7 +165,12 @@ public class Method implements AttributeListListener {
 
         Class<?> superCls = cls.getSuperclass();
         if( superCls != null )
-            return getInheritedMethod(builder, name, args, ret, superCls,
+            return getInheritedMethod(
+                    builder,
+                    name,
+                    args,
+                    ret,
+                    superCls,
                     samePackage
                             && cls.getPackage().equals(superCls.getPackage()));
 
@@ -329,6 +334,7 @@ public class Method implements AttributeListListener {
      * @param attr
      *            the new value of the attribute
      */
+    @Override
     public void attributeChanged(String attrId, Attribute attr) {
         if( attrId.equals(Attribute.ATTR_CODE) && (attr != null) ) {
             ((Code) attr).setOwner(classBuilder_, this);

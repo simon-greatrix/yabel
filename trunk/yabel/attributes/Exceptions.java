@@ -1,16 +1,15 @@
 package yabel.attributes;
 
-import yabel.ClassData;
-import yabel.io.IO;
-
-import yabel.constants.ConstantClass;
-import yabel.constants.ConstantPool;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
+
+import yabel.ClassData;
+import yabel.constants.ConstantClass;
+import yabel.constants.ConstantPool;
+import yabel.io.IO;
 
 /**
  * Exceptions attribute
@@ -69,13 +68,12 @@ public class Exceptions extends Attribute {
         cp_ = cp;
         int len = IO.readS4(input);
         if( (len < 2) || (len % 2 != 0) )
-            throw new IOException(
-                    "Exceptions attribute has length " + len
-                            + ". Should be at least 2 and even.");
+            throw new IOException("Exceptions attribute has length " + len
+                    + ". Should be at least 2 and even.");
         int len2 = IO.readU2(input);
         if( (len2 * 2 + 2) != len )
-            throw new IOException("Exception attribute of length "
-                    + len + " has " + len2 + " exceptions.");
+            throw new IOException("Exception attribute of length " + len
+                    + " has " + len2 + " exceptions.");
         for(int i = 0;i < len2;i++) {
             int c = IO.readU2(input);
             ConstantClass cc = cp.validate(c, ConstantClass.class);

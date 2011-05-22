@@ -4,12 +4,7 @@ import java.util.List;
 
 import yabel.ClassData;
 import yabel.OpCodes;
-import yabel.code.CodeOperand;
-import yabel.code.CodeTokenizer;
-import yabel.code.CompilerOutput;
-import yabel.code.YabelBadNumberException;
-import yabel.code.YabelReplacementRequiredException;
-import yabel.code.YabelWrongTokenCountException;
+import yabel.code.*;
 
 /**
  * Operands for constants.
@@ -24,11 +19,11 @@ public enum CodeConstant implements CodeOperand {
         @Override
         public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             checkSize(toks);
-            
+
             // some ops have special codes
-            int i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
+            int i = CompilerOutput.getInt(toks.get(2), toks.get(0));
             int ic = i + 1;
-            if( 0 <= ic && ic < ICONST_VALS.length ) {
+            if( (0 <= ic) && (ic < ICONST_VALS.length) ) {
                 code.appendU1(ICONST_VALS[ic]);
                 return;
             }
@@ -48,7 +43,7 @@ public enum CodeConstant implements CodeOperand {
             }
 
             // have to use a constant
-            CodeLDC.compile(code,code.getConstantRef(Integer.valueOf(i)));
+            CodeLDC.compile(code, code.getConstantRef(Integer.valueOf(i)));
         }
     },
 
@@ -62,7 +57,7 @@ public enum CodeConstant implements CodeOperand {
             String t2 = toks.get(2);
             String r2 = CodeTokenizer.isReplacement(t2);
             if( r2 == null )
-                throw new YabelReplacementRequiredException(toks,1);
+                throw new YabelReplacementRequiredException(toks, 1);
             Number n = cd.getSafe(Number.class, r2);
             int val = code.getConstantRef(n);
             code.appendU2(val);
@@ -76,7 +71,8 @@ public enum CodeConstant implements CodeOperand {
         public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
             // compile type-value constant
             if( toks.size() != 4 )
-                throw new YabelWrongTokenCountException(toks,2,"type and value");
+                throw new YabelWrongTokenCountException(toks, 2,
+                        "type and value");
 
             // replacements already handled
             int val = code.getConstantRef(toks.get(0), toks.get(2), toks.get(3));
@@ -110,14 +106,14 @@ public enum CodeConstant implements CodeOperand {
                 try {
                     n = Integer.valueOf(t2);
                 } catch (NumberFormatException nfe) {
-                    throw new YabelBadNumberException(toks,2,"integer");
+                    throw new YabelBadNumberException(toks, 2, "integer");
                 }
             }
             int val = code.getConstantRef(n);
             code.appendU2(val);
         }
     },
-    
+
     /** A float constant */
     FLOAT {
         /** Compile float constant. {@inheritDoc} */
@@ -132,7 +128,7 @@ public enum CodeConstant implements CodeOperand {
                 try {
                     n = Float.valueOf(t2);
                 } catch (NumberFormatException nfe) {
-                    throw new YabelBadNumberException(toks,2,"float");
+                    throw new YabelBadNumberException(toks, 2, "float");
 
                 }
             }
@@ -140,7 +136,7 @@ public enum CodeConstant implements CodeOperand {
             code.appendU2(val);
         }
     },
-    
+
     /** A long constant */
     LONG {
         /** Compile long constant. {@inheritDoc} */
@@ -155,7 +151,7 @@ public enum CodeConstant implements CodeOperand {
                 try {
                     n = Long.valueOf(t2);
                 } catch (NumberFormatException nfe) {
-                    throw new YabelBadNumberException(toks,2,"long");
+                    throw new YabelBadNumberException(toks, 2, "long");
 
                 }
             }
@@ -163,7 +159,7 @@ public enum CodeConstant implements CodeOperand {
             code.appendU2(val);
         }
     },
-    
+
     /** A double constant */
     DOUBLE {
         /** Compile double constant. {@inheritDoc} */
@@ -178,7 +174,7 @@ public enum CodeConstant implements CodeOperand {
                 try {
                     n = Double.valueOf(t2);
                 } catch (NumberFormatException nfe) {
-                    throw new YabelBadNumberException(toks,2,"double");
+                    throw new YabelBadNumberException(toks, 2, "double");
 
                 }
             }
@@ -190,7 +186,8 @@ public enum CodeConstant implements CodeOperand {
     /** ICONST instructions in order */
     static final byte[] ICONST_VALS = new byte[] { OpCodes.ICONST_M1,
             OpCodes.ICONST_0, OpCodes.ICONST_1, OpCodes.ICONST_2,
-            OpCodes.ICONST_3, OpCodes.ICONST_4, OpCodes.ICONST_5 };   
+            OpCodes.ICONST_3, OpCodes.ICONST_4, OpCodes.ICONST_5 };
+
 
     /**
      * Most of the constants require a single parameter, the constant.
@@ -200,11 +197,12 @@ public enum CodeConstant implements CodeOperand {
      */
     protected static void checkSize(List<String> toks) {
         if( toks.size() != 3 )
-            throw new YabelWrongTokenCountException(toks,1,"value");
+            throw new YabelWrongTokenCountException(toks, 1, "value");
     }
 
 
     /** Compile integer constant. {@inheritDoc} */
     @Override
-    abstract public void compile(CompilerOutput code, List<String> toks, ClassData cd);
+    abstract public void compile(CompilerOutput code, List<String> toks,
+            ClassData cd);
 }

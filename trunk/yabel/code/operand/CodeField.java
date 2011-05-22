@@ -10,22 +10,23 @@ import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Field operations.
+ * 
  * @author Simon Greatrix
- *
+ * 
  */
 public enum CodeField implements CodeOperand {
     /** A reference to field constant */
     FIELD,
-    
+
     /** A PUTFIELD operation */
     PUTFIELD,
-    
+
     /** A GETFIELD operation */
     GETFIELD,
-    
+
     /** A PUTSTATIC operation */
     PUTSTATIC,
-    
+
     /** A GETSTATIC operation */
     GETSTATIC;
 
@@ -33,15 +34,16 @@ public enum CodeField implements CodeOperand {
      * The op code for this operation
      */
     private final byte opCode_;
-    
+
+
     private CodeField() {
         opCode_ = OpCodes.getOpCode(name());
     }
 
+
     /** {@inheritDoc} */
     @Override
-    public void compile(CompilerOutput code, List<String> toks,
-            ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         if( opCode_ != (byte) 0xff ) code.appendU1(opCode_);
 
         // is it valid? Local field will just be field name. Remote field
@@ -62,7 +64,8 @@ public enum CodeField implements CodeOperand {
             return;
         }
         default:
-            throw new YabelWrongTokenCountException(toks, 1,"name", 3,"class, name and type");
+            throw new YabelWrongTokenCountException(toks, 1, "name", 3,
+                    "class, name and type");
         }
     }
 }

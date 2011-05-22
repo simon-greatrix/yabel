@@ -1,12 +1,12 @@
 package yabel.attributes;
 
-import yabel.ClassData;
-import yabel.constants.ConstantPool;
-import yabel.io.IO;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import yabel.ClassData;
+import yabel.constants.ConstantPool;
+import yabel.io.IO;
 
 /** A generic attribute in the class */
 public class GenericAttribute extends Attribute {
@@ -95,8 +95,8 @@ public class GenericAttribute extends Attribute {
     public void writeTo(ByteArrayOutputStream baos) {
         IO.writeU2(baos, attrId_.getIndex());
         IO.writeS4(baos, data_.length);
-        for(int i = 0;i < data_.length;i++) {
-            baos.write(data_[i]);
+        for(byte element:data_) {
+            baos.write(element);
         }
     }
 

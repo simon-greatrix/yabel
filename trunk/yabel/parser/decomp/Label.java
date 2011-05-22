@@ -93,33 +93,8 @@ public class Label implements Source {
      *            the new name
      */
     public void addName(String name) {
-        if( name==null ) return;
+        if( name == null ) return;
         names_.add(name);
-    }
-
-
-    /**
-     * Remove a name from this label
-     * 
-     * @param name
-     *            the name to remove
-     */
-    public void removeName(String name) {
-        if( name==null ) return;
-        names_.remove(name);
-        if( name.equals(defaultName_) ) defaultName_ = null;
-    }
-
-
-    /**
-     * Get this label's name
-     * 
-     * @return the name
-     */
-    public String getName() {
-        if( defaultName_ != null ) return defaultName_;
-        if( !names_.isEmpty() ) return names_.first();
-        return String.format("lbl%04x", pos_);
     }
 
 
@@ -140,6 +115,18 @@ public class Label implements Source {
 
 
     /**
+     * Get this label's name
+     * 
+     * @return the name
+     */
+    public String getName() {
+        if( defaultName_ != null ) return defaultName_;
+        if( !names_.isEmpty() ) return names_.first();
+        return String.format("lbl%04x", pos_);
+    }
+
+
+    /**
      * Get a reference to this label
      * 
      * @return the reference
@@ -156,6 +143,19 @@ public class Label implements Source {
      */
     public Ref4 getRef4() {
         return ref4_;
+    }
+
+
+    /**
+     * Remove a name from this label
+     * 
+     * @param name
+     *            the name to remove
+     */
+    public void removeName(String name) {
+        if( name == null ) return;
+        names_.remove(name);
+        if( name.equals(defaultName_) ) defaultName_ = null;
     }
 
 

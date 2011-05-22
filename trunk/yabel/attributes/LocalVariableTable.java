@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 
 import yabel.ClassData;
@@ -17,28 +18,29 @@ import yabel.io.IO;
  * 
  * @author Simon Greatrix
  */
-public class LocalVariableTable extends Attribute {
+public class LocalVariableTable extends Attribute implements
+        Iterable<LocalVariableTable.Scope> {
 
     /**
      * Definition of the scope of a local variable.
      * 
      * @author Simon Greatrix
      */
-    public class Var {
+    public static class Scope {
         /** The end of this variable's scope */
         private Location endPC_;
 
         /** The local variable's index */
-        private int index_;
+        private final int index_;
 
         /** The name of this variable */
-        private ConstantUtf8 name_;
+        private final ConstantUtf8 name_;
 
         /** The start of this variable's scope */
         private Location startPC_;
 
         /** The type of this variable */
-        private ConstantUtf8 type_;
+        private final ConstantUtf8 type_;
 
 
         /**
@@ -49,7 +51,7 @@ public class LocalVariableTable extends Attribute {
          * @param cd
          *            the definition
          */
-        Var(ConstantPool cp, ClassData cd) {
+        Scope(ConstantPool cp, ClassData cd) {
             startPC_ = getLoc(cd, "start");
             endPC_ = getLoc(cd, "end");
             name_ = new ConstantUtf8(cp, cd.getSafe(String.class, "name"));
@@ -66,7 +68,7 @@ public class LocalVariableTable extends Attribute {
          * @param in
          *            the byte code
          */
-        Var(ConstantPool cp, InputStream in) throws IOException {
+        Scope(ConstantPool cp, InputStream in) throws IOException {
             int startPC = IO.readU2(in);
             int length = IO.readU2(in);
             startPC_ = new Location(startPC);
@@ -74,6 +76,62 @@ public class LocalVariableTable extends Attribute {
             name_ = cp.validate(IO.readU2(in), ConstantUtf8.class);
             type_ = cp.validate(IO.readU2(in), ConstantUtf8.class);
             index_ = IO.readU2(in);
+        }
+
+
+        /**
+         * Create a new variable scope
+         * 
+         * @param cp
+         *            the class's constant pool
+         * @param index
+         *            the variable's index in the local frame
+         * @param name
+         *            the variable's name
+         * @param type
+         *            the variable's type
+         */
+        public Scope(ConstantPool cp, int index, String name, String type) {
+            index_ = index;
+            name_ = new ConstantUtf8(cp, name);
+            type_ = new ConstantUtf8(cp, name);
+            startPC_ = new Location();
+            endPC_ = new Location();
+        }
+
+
+        public Location getEndPC() {
+            return endPC_;
+        }
+
+
+        public int getIndex() {
+            return index_;
+        }
+
+
+        public ConstantUtf8 getName() {
+            return name_;
+        }
+
+
+        public Location getStartPC() {
+            return startPC_;
+        }
+
+
+        public ConstantUtf8 getType() {
+            return type_;
+        }
+
+
+        public void setEndPC(Location endPC) {
+            endPC_ = endPC;
+        }
+
+
+        public void setStartPC(Location startPC) {
+            startPC_ = startPC;
         }
 
 
@@ -127,7 +185,7 @@ public class LocalVariableTable extends Attribute {
     }
 
     /** The local variable definitions */
-    private final List<Var> vars_;
+    private final List<Scope> vars_;
 
 
     /**
@@ -138,7 +196,7 @@ public class LocalVariableTable extends Attribute {
      */
     public LocalVariableTable(ConstantPool cp) {
         super(cp, ATTR_LOCAL_VARIABLE_TABLE);
-        vars_ = new ArrayList<Var>();
+        vars_ = new ArrayList<Scope>();
     }
 
 
@@ -154,9 +212,9 @@ public class LocalVariableTable extends Attribute {
         super(cp, ATTR_LOCAL_VARIABLE_TABLE);
         List<ClassData> table = cd.getListSafe(ClassData.class, "table");
         int size = table.size();
-        vars_ = new ArrayList<Var>(size);
+        vars_ = new ArrayList<Scope>(size);
         for(ClassData data:table) {
-            vars_.add(new Var(cp, data));
+            vars_.add(new Scope(cp, data));
         }
     }
 
@@ -177,10 +235,21 @@ public class LocalVariableTable extends Attribute {
         if( size * 10 + 2 != len )
             throw new IOException("LocalVariableTable attribute has " + len
                     + " bytes but contains " + size + " entries");
-        vars_ = new ArrayList<Var>(size);
+        vars_ = new ArrayList<Scope>(size);
         for(int i = 0;i < size;i++) {
-            vars_.add(new Var(cp, in));
+            vars_.add(new Scope(cp, in));
         }
+    }
+
+
+    /**
+     * {@inheritDoc}
+     * 
+     * @see java.lang.Iterable#iterator()
+     */
+    @Override
+    public Iterator<Scope> iterator() {
+        return vars_.iterator();
     }
 
 
@@ -192,7 +261,7 @@ public class LocalVariableTable extends Attribute {
     @Override
     public ClassData toClassData() {
         List<ClassData> table = new ArrayList<ClassData>(vars_.size());
-        for(Var v:vars_) {
+        for(Scope v:vars_) {
             table.add(v.toClassData());
         }
         ClassData ret = makeClassData();
@@ -211,7 +280,7 @@ public class LocalVariableTable extends Attribute {
         IO.writeU2(baos, attrId_.getIndex());
         IO.writeU2(baos, vars_.size() * 10 + 2);
         IO.writeU2(baos, vars_.size());
-        for(Var v:vars_) {
+        for(Scope v:vars_) {
             v.writeTo(baos);
         }
     }

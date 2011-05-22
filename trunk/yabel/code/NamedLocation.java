@@ -54,7 +54,7 @@ public class NamedLocation extends Location {
     /** {@inheritDoc} */
     @Override
     public void requirePlaced() {
-        if( ! isSet() )
+        if( !isSet() )
             throw new YabelLabelException("Location \"" + id_
                     + "\" is not located");
     }
@@ -67,7 +67,7 @@ public class NamedLocation extends Location {
      */
     @Override
     public String toString() {
-        if( ! isSet() ) {
+        if( !isSet() ) {
             return "Location[" + id_ + " @ <unset>]";
         }
         return "Location[" + id_ + " @ " + getLocation() + "]";

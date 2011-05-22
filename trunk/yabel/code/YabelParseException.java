@@ -12,6 +12,7 @@ public class YabelParseException extends YabelException {
     /** serial version UID */
     private static final long serialVersionUID = -4439358787820231815L;
 
+
     /**
      * Problem parsing compiler input
      * 

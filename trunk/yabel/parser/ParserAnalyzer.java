@@ -4,12 +4,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
-import java.util.Stack;
+import java.util.*;
 
 import yabel.Access;
 import yabel.Method;
@@ -28,6 +23,99 @@ import yabel.io.IO;
  * 
  */
 public class ParserAnalyzer implements ParserListener {
+
+    /**
+     * Representation of a block of op codes that will normally run as a unit
+     * and hence can be considered a single item for calculating stack
+     * requirements.
+     * 
+     * @author Simon Greatrix
+     */
+    static class Block {
+        /** Where this block branches to */
+        Integer[] branchTo_;
+
+        /** The cumulative delta of the block */
+        int delta_ = 0;
+
+        /** Did this block end with a RET? In which return to JSR point */
+        boolean exitViaRET_ = false;
+
+        /** The stack high-water-mark in this bock */
+        int hwm_ = 0;
+
+        /** If the block was terminated by a JSR, where to return to */
+        Integer retFromJSR_ = null;
+
+
+        /** {@inheritDoc} */
+        @Override
+        public String toString() {
+            StringBuilder buf = new StringBuilder();
+            buf.append("Block[ delta=").append(delta_).append(" hwm=").append(
+                    hwm_).append(", branch-to=(");
+            if( branchTo_ != null ) {
+                for(int i = 0;i < branchTo_.length;i++) {
+                    if( i > 0 ) buf.append(",");
+                    buf.append(branchTo_[i]);
+                }
+            }
+            buf.append(')');
+            if( exitViaRET_ ) buf.append(",RET");
+            buf.append("]");
+            return buf.toString();
+        }
+    }
+
+
+
+    /**
+     * Representation of an op-code and how it affects the stack. Used in
+     * calculating required stack depth for a method.
+     * 
+     * @author Simon Greatrix
+     * 
+     */
+    static class OpCode {
+        /** Standard array used when an op-code is not a branch */
+        private static final int[] NO_BRANCHES = new int[0];
+
+        /** Where this op-code branches to (relative) */
+        int[] branchTo_ = NO_BRANCHES;
+
+        /** Change in stack from this op-code */
+        int delta_;
+
+        /** The byte-length of this op-code */
+        int length_;
+
+        /** The op-code */
+        byte opCode_;
+
+
+        /**
+         * This OpCode as a String
+         * 
+         * @return this OpCode
+         */
+        @Override
+        public String toString() {
+            StringBuilder buf = new StringBuilder();
+            buf.append("OpCode[").append(OpCodes.getOpName(opCode_)).append(
+                    ", delta=").append(delta_).append(", length=").append(
+                    length_);
+            if( branchTo_.length > 0 ) {
+                buf.append(", branchTo=(");
+                for(int i = 0;i < branchTo_.length;i++) {
+                    if( i > 0 ) buf.append(',');
+                    buf.append(branchTo_[i]);
+                }
+                buf.append(')');
+            }
+            buf.append(']');
+            return buf.toString();
+        }
+    }
 
     /** File path to write debug messages to */
     private static String DEBUG_FILE = null;
@@ -52,7 +140,6 @@ public class ParserAnalyzer implements ParserListener {
 
     /** Op-codes that set local variable X+1 */
     static final Set<Byte> VAR_OPS_X1;
-
 
     static {
         // initialise ops that update local variable X
@@ -134,7 +221,6 @@ public class ParserAnalyzer implements ParserListener {
         opVars.add(Byte.valueOf(OpCodes.LLOAD_3));
         opVars.add(Byte.valueOf(OpCodes.LSTORE_3));
         VAR_OPS_4 = Collections.unmodifiableSet(opVars);
-        
 
         String propName = Parser.class.getName() + ".debugFile";
         String debug = System.getProperty(propName);
@@ -144,7 +230,7 @@ public class ParserAnalyzer implements ParserListener {
         if( (debug != null) && !debug.equals("") ) {
             File f = new File(debug).getAbsoluteFile();
             File p = f.getParentFile();
-            if( (p!=null) && (!p.exists()) && (!p.mkdirs()) ) {
+            if( (p != null) && (!p.exists()) && (!p.mkdirs()) ) {
                 System.err.println("Cannot create debug folder "
                         + p.getAbsolutePath());
             } else {
@@ -273,101 +359,6 @@ public class ParserAnalyzer implements ParserListener {
             1/* MONITOREXIT */, 0/* WIDE */, -3/* MULTIANEWARRAY */,
             1/* IFNULL */, 1/* IFNONNULL */, 0/* GOTO_W */, 0 /* JSR_W */};
 
-
-
-    /**
-     * Representation of a block of op codes that will normally run as a unit
-     * and hence can be considered a single item for calculating stack
-     * requirements.
-     * 
-     * @author Simon Greatrix
-     */
-    static class Block {
-        /** Where this block branches to */
-        Integer[] branchTo_;
-
-        /** The cumulative delta of the block */
-        int delta_ = 0;
-
-        /** Did this block end with a RET? In which return to JSR point */
-        boolean exitViaRET_ = false;
-
-        /** The stack high-water-mark in this bock */
-        int hwm_ = 0;
-
-        /** If the block was terminated by a JSR, where to return to */
-        Integer retFromJSR_ = null;
-
-
-        /** {@inheritDoc} */
-        @Override
-        public String toString() {
-            StringBuilder buf = new StringBuilder();
-            buf.append("Block[ delta=").append(delta_).append(" hwm=").append(
-                    hwm_).append(", branch-to=(");
-            if( branchTo_ != null ) {
-                for(int i = 0;i < branchTo_.length;i++) {
-                    if( i > 0 ) buf.append(",");
-                    buf.append(branchTo_[i]);
-                }
-            }
-            buf.append(')');
-            if( exitViaRET_ ) buf.append(",RET");
-            buf.append("]");
-            return buf.toString();
-        }
-    }
-
-
-
-    /**
-     * Representation of an op-code and how it affects the stack. Used in
-     * calculating required stack depth for a method.
-     * 
-     * @author Simon Greatrix
-     * 
-     */
-    static class OpCode {
-        /** Standard array used when an op-code is not a branch */
-        private static final int[] NO_BRANCHES = new int[0];
-
-        /** Where this op-code branches to (relative) */
-        int[] branchTo_ = NO_BRANCHES;
-
-        /** Change in stack from this op-code */
-        int delta_;
-
-        /** The byte-length of this op-code */
-        int length_;
-
-        /** The op-code */
-        byte opCode_;
-
-
-        /**
-         * This OpCode as a String
-         * 
-         * @return this OpCode
-         */
-        @Override
-        public String toString() {
-            StringBuilder buf = new StringBuilder();
-            buf.append("OpCode[").append(OpCodes.getOpName(opCode_)).append(
-                    ", delta=").append(delta_).append(", length=").append(
-                    length_);
-            if( branchTo_.length > 0 ) {
-                buf.append(", branchTo=(");
-                for(int i = 0;i < branchTo_.length;i++) {
-                    if( i > 0 ) buf.append(',');
-                    buf.append(branchTo_[i]);
-                }
-                buf.append(')');
-            }
-            buf.append(']');
-            return buf.toString();
-        }
-    }
-
     /** Map of location to op-code block. */
     Map<Integer, ParserAnalyzer.Block> blocks_ = new HashMap<Integer, ParserAnalyzer.Block>();
 
@@ -388,7 +379,6 @@ public class ParserAnalyzer implements ParserListener {
 
     /** Maximum stack identified so far */
     int maxStack_ = -1;
-    
 
     /** Writer for debug messages */
     private PrintWriter debug_ = null;
@@ -449,11 +439,11 @@ public class ParserAnalyzer implements ParserListener {
                         e.printStackTrace(System.err);
                     }
                 }
-            }            
-            
+            }
+
             Parser parser = new Parser(this);
-            for(int i = 0;i < code.length;i++) {
-                parser.parse(code[i]);
+            for(byte element:code) {
+                parser.parse(element);
             }
             exploreBlocks(0, 0);
             Handler[] handlers = attrCode.getHandlers();
@@ -497,7 +487,8 @@ public class ParserAnalyzer implements ParserListener {
                 }
                 // if debugging, report new block
                 if( isDebug_ )
-                    debug_.printf("%6d : %s \t: %s\n",Integer.valueOf(p),String.valueOf(opc),String.valueOf(block));
+                    debug_.printf("%6d : %s \t: %s\n", Integer.valueOf(p),
+                            String.valueOf(opc), String.valueOf(block));
                 return block;
             }
 
@@ -512,7 +503,8 @@ public class ParserAnalyzer implements ParserListener {
                     block.exitViaRET_ = true;
                 }
                 if( isDebug_ )
-                    debug_.printf("%6d : %s \t: %s\n",Integer.valueOf(p),String.valueOf(opc),String.valueOf(block));
+                    debug_.printf("%6d : %s \t: %s\n", Integer.valueOf(p),
+                            String.valueOf(opc), String.valueOf(block));
 
                 // return block
                 return block;
@@ -520,7 +512,8 @@ public class ParserAnalyzer implements ParserListener {
 
             // continue building block
             if( isDebug_ )
-                debug_.printf("%6d : %s \t: %s\n",Integer.valueOf(p),String.valueOf(opc),String.valueOf(block));
+                debug_.printf("%6d : %s \t: %s\n", Integer.valueOf(p),
+                        String.valueOf(opc), String.valueOf(block));
             p = p + opc.length_;
         }
     }
@@ -646,6 +639,7 @@ public class ParserAnalyzer implements ParserListener {
      * @param length
      *            the length of the op-code
      */
+    @Override
     public void opCodeFinish(int position, byte[] buffer, int length) {
         if( findMaxVars_ ) {
             updateMaxVars(buffer);
@@ -794,7 +788,8 @@ public class ParserAnalyzer implements ParserListener {
             }
         }
         if( isDebug_ )
-            debug_.printf("MaxStack: %6d : %s\n",Integer.valueOf(position),String.valueOf(opc));
+            debug_.printf("MaxStack: %6d : %s\n", Integer.valueOf(position),
+                    String.valueOf(opc));
         code_[position] = opc;
     }
 
@@ -803,16 +798,11 @@ public class ParserAnalyzer implements ParserListener {
         Byte b = Byte.valueOf(buffer[0]);
 
         // check fixed variable operators
-        if( VAR_OPS_0.contains(b) )
-            maxLocalVars_ = Math.max(maxLocalVars_, 1);
-        if( VAR_OPS_1.contains(b) )
-            maxLocalVars_ = Math.max(maxLocalVars_, 2);
-        if( VAR_OPS_2.contains(b) )
-            maxLocalVars_ = Math.max(maxLocalVars_, 3);
-        if( VAR_OPS_3.contains(b) )
-            maxLocalVars_ = Math.max(maxLocalVars_, 4);
-        if( VAR_OPS_4.contains(b) )
-            maxLocalVars_ = Math.max(maxLocalVars_, 5);
+        if( VAR_OPS_0.contains(b) ) maxLocalVars_ = Math.max(maxLocalVars_, 1);
+        if( VAR_OPS_1.contains(b) ) maxLocalVars_ = Math.max(maxLocalVars_, 2);
+        if( VAR_OPS_2.contains(b) ) maxLocalVars_ = Math.max(maxLocalVars_, 3);
+        if( VAR_OPS_3.contains(b) ) maxLocalVars_ = Math.max(maxLocalVars_, 4);
+        if( VAR_OPS_4.contains(b) ) maxLocalVars_ = Math.max(maxLocalVars_, 5);
 
         // check variable operators
         if( VAR_OPS_X.contains(b) ) {

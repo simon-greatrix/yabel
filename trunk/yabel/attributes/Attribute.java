@@ -50,20 +50,6 @@ abstract public class Attribute {
      * @param cp
      *            the constant pool associated with the class this attribute is
      *            in
-     * @param attrName
-     *            the name of this attribute type
-     */
-    protected Attribute(ConstantPool cp, String attrName) {
-        attrId_ = new ConstantUtf8(cp, attrName);
-    }
-
-
-    /**
-     * Create a new Attribute of the given named type
-     * 
-     * @param cp
-     *            the constant pool associated with the class this attribute is
-     *            in
      * @param cd
      *            the class data specifying the name
      */
@@ -87,6 +73,20 @@ abstract public class Attribute {
 
 
     /**
+     * Create a new Attribute of the given named type
+     * 
+     * @param cp
+     *            the constant pool associated with the class this attribute is
+     *            in
+     * @param attrName
+     *            the name of this attribute type
+     */
+    protected Attribute(ConstantPool cp, String attrName) {
+        attrId_ = new ConstantUtf8(cp, attrName);
+    }
+
+
+    /**
      * Get the Utf8 constant that holds this attribute's name
      * 
      * @return the id
@@ -103,16 +103,8 @@ abstract public class Attribute {
      *            the containing list
      */
     void listChanged(AttributeList owner) {
-    // do nothing
+        // do nothing
     }
-
-
-    /**
-     * Store this attribute in a ClassData structure
-     * 
-     * @return the ClassData
-     */
-    abstract public ClassData toClassData();
 
 
     /**
@@ -125,6 +117,14 @@ abstract public class Attribute {
         cd.put("name", attrId_.get());
         return cd;
     }
+
+
+    /**
+     * Store this attribute in a ClassData structure
+     * 
+     * @return the ClassData
+     */
+    abstract public ClassData toClassData();
 
 
     /**

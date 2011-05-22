@@ -70,7 +70,7 @@ public class LabeledHandler {
         cd.put("start", startPC_.getName());
         cd.put("end", endPC_.getName());
         cd.put("handler", handlerPC_.getName());
-        cd.put("type",type_);
+        cd.put("type", type_);
         return cd;
     }
 }

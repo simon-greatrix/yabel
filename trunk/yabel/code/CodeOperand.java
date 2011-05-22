@@ -12,14 +12,6 @@ import yabel.ClassData;
  */
 public interface CodeOperand {
     /**
-     * Return the name of this operand
-     * 
-     * @return the name of this operand
-     */
-    public String name();
-
-
-    /**
      * Compile this operand on to the provided stream
      * 
      * @param code
@@ -30,4 +22,12 @@ public interface CodeOperand {
      *            the ClassData associated with this compilation
      */
     public void compile(CompilerOutput code, List<String> toks, ClassData cd);
+
+
+    /**
+     * Return the name of this operand
+     * 
+     * @return the name of this operand
+     */
+    public String name();
 }
