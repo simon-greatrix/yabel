@@ -20,7 +20,7 @@ public class CodeIINC implements CodeOperand {
 
 
     private CodeIINC() {
-    // private constructor
+        // private constructor
     }
 
 
@@ -34,11 +34,11 @@ public class CodeIINC implements CodeOperand {
 
         // size is 4, so have index and constant
         String raw = toks.get(0);
-        int iincIndex = CompilerOutput.getInt(cd, toks.get(2), raw);
-        int iincConst = CompilerOutput.getInt(cd, toks.get(3), raw);
+        int iincIndex = code.getVariable(toks.get(2), raw);
+        int iincConst = CompilerOutput.getInt(toks.get(3), raw);
 
         // output IINC or WIDE IINC as needed
-        if( (iincIndex < 0x100) && (iincConst < 0x100) && !code.wasLastWide()) {
+        if( (iincIndex < 0x100) && (iincConst < 0x100) && !code.wasLastWide() ) {
             code.appendU1(OpCodes.IINC);
             code.appendU1((byte) iincIndex);
             code.appendU1((byte) iincConst);

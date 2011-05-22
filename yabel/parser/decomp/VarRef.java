@@ -5,25 +5,29 @@ package yabel.parser.decomp;
  * 
  * @author Simon Greatrix
  */
-public class VarRef implements Source {
-    /**
-     * The location of this reference
-     */
+class VarRef implements Source {
+    /** Associated variable set */
+    final VariableSet set_;
+
+    /** The location of this reference */
     final int loc_;
 
     /** The variable this is associated with */
-    private final Variable variable_;
+    final int variable_;
 
 
     /**
      * New reference
      * 
+     * @param set
+     *            the associated variable set
      * @param variable
      *            the variable
      * @param loc
      *            the location
      */
-    VarRef(Variable variable, int loc) {
+    VarRef(VariableSet set, int variable, int loc) {
+        set_ = set;
         variable_ = variable;
         loc_ = loc;
     }
@@ -34,9 +38,12 @@ public class VarRef implements Source {
      * 
      * @see yabel.parser.decomp.Source#source()
      */
+    @Override
     public String source() {
-        VarDef def = variable_.getDef(loc_);
-        if( (def!=null) && (def.name_ != null) ) return "$" + def.name_;
-        return Integer.toString(variable_.index_);
+        VarScope scope = set_.getScope(loc_, variable_);
+        if( scope != null ) {
+            return scope.name_;
+        }
+        return Integer.toString(variable_);
     }
 }

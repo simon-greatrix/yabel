@@ -10,19 +10,20 @@ import yabel.code.YabelWrongTokenCountException;
 
 /**
  * Compile a method reference or call.
+ * 
  * @author Simon Greatrix
- *
+ * 
  */
 public enum CodeMethod implements CodeOperand {
     /** A reference to a method constant */
     METHOD,
-    
+
     /** An INVOKESPECIAL operation */
     INVOKESPECIAL,
-    
+
     /** An INVOKEVIRTUAL operation */
     INVOKEVIRTUAL,
-    
+
     /** An INVOKESTATIC operation */
     INVOKESTATIC;
 
@@ -30,17 +31,17 @@ public enum CodeMethod implements CodeOperand {
      * The op code for this operation
      */
     private final byte opCode_;
-    
+
+
     private CodeMethod() {
         opCode_ = OpCodes.getOpCode(name());
     }
 
+
     /** {@inheritDoc} */
     @Override
-    public void compile(CompilerOutput code, List<String> toks,
-            ClassData cd) {
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         if( opCode_ != (byte) 0xff ) code.appendU1(opCode_);
-
 
         // 1 argument - look up in configuration
         // 2 arguments - local method name and type
@@ -51,7 +52,7 @@ public enum CodeMethod implements CodeOperand {
         case 3: {
             // try for a reference id in the ClassData
             String p = toks.get(2);
-            i = CompilerOutput.getInt(cd, p, toks.get(0));
+            i = CompilerOutput.getInt(p, toks.get(0));
             break;
         }
         case 4: {
@@ -63,7 +64,9 @@ public enum CodeMethod implements CodeOperand {
             break;
         }
         default:
-            throw new YabelWrongTokenCountException(toks, 1, "constant reference", 2, "name and type", 3, "class, name and type");
+            throw new YabelWrongTokenCountException(toks, 1,
+                    "constant reference", 2, "name and type", 3,
+                    "class, name and type");
         }
         code.appendU2(i);
     }

@@ -3,12 +3,7 @@ package yabel.code;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -16,23 +11,8 @@ import yabel.ClassBuilder;
 import yabel.ClassData;
 import yabel.Method;
 import yabel.OpCodes;
-import yabel.attributes.Attribute;
-import yabel.attributes.AttributeList;
-import yabel.attributes.AttributeListListener;
-import yabel.attributes.LineNumberTable;
-import yabel.code.operand.CodeArrays;
-import yabel.code.operand.CodeClass;
-import yabel.code.operand.CodeConstant;
-import yabel.code.operand.CodeField;
-import yabel.code.operand.CodeIINC;
-import yabel.code.operand.CodeInterface;
-import yabel.code.operand.CodeLDC;
-import yabel.code.operand.CodeLabel;
-import yabel.code.operand.CodeLoadStore;
-import yabel.code.operand.CodeMethod;
-import yabel.code.operand.CodeSwitch;
-import yabel.code.operand.CodeU1U2;
-import yabel.code.operand.CodeVar;
+import yabel.attributes.*;
+import yabel.code.operand.*;
 import yabel.constants.ConstantClass;
 import yabel.constants.ConstantPool;
 import yabel.io.IO;
@@ -114,7 +94,7 @@ public class Code extends Attribute implements AttributeListListener {
             int i1 = i + 1;
             char ch2 = (i1 < val.length()) ? val.charAt(i1) : 'x';
             if( ((ch == '/') && ((ch2 == '/') || (ch2 == '*')))
-                    || ((ch == '*' && ch2 == '/')) ) notComment = false;
+                    || (((ch == '*') && (ch2 == '/'))) ) notComment = false;
 
             // handle regular characters
             if( notComment && (ch > 0x20) && (ch < 0x7f) && (ch != ' ')
@@ -397,7 +377,7 @@ public class Code extends Attribute implements AttributeListListener {
             }
         }
 
-        //if handlers use labels as from decompiler, this errors
+        // if handlers use labels as from decompiler, this errors
         list = cd.getList(ClassData.class, "handlers");
         if( list != null ) {
             for(ClassData d:list) {
@@ -535,7 +515,7 @@ public class Code extends Attribute implements AttributeListListener {
      */
     @Override
     public void attributeChanged(String attrId, Attribute attr) {
-    // TODO Auto-generated method stub
+        // TODO Auto-generated method stub
 
     }
 
@@ -782,10 +762,14 @@ public class Code extends Attribute implements AttributeListListener {
         byte[] code = getCodeInternal();
 
         Decompiler decomp = new Decompiler(cp_);
-        List<Attribute> lnt = attrList_.getAll(cp_,
+        List<Attribute> attrs = attrList_.getAll(cp_,
                 Attribute.ATTR_LINE_NUMBER_TABLE);
-        for(Attribute a:lnt) {
+        for(Attribute a:attrs) {
             decomp.addLineNumbers((LineNumberTable) a);
+        }
+        attrs = attrList_.getAll(cp_, Attribute.ATTR_LOCAL_VARIABLE_TABLE);
+        for(Attribute a:attrs) {
+            decomp.addLocalVars((LocalVariableTable) a);
         }
 
         decomp.parse(code);
@@ -794,25 +778,25 @@ public class Code extends Attribute implements AttributeListListener {
         }
 
         ClassData cd = decomp.finish();
-        
+
         // we want to merge in the decompiler's attributes
         List<ClassData> attrsDecomp = cd.getList(ClassData.class, "attributes");
         List<ClassData> attrsSrc = attrList_.toClassData();
-        for(int i=0;i<attrsSrc.size();i++) {
+        for(int i = 0;i < attrsSrc.size();i++) {
             ClassData a = attrsSrc.get(i);
-            String aName = a.getSafe(String.class,"name");
-            for(int j=0;j<attrsDecomp.size();j++) {
+            String aName = a.getSafe(String.class, "name");
+            for(int j = 0;j < attrsDecomp.size();j++) {
                 ClassData d = attrsDecomp.get(j);
-                String dName = d.getSafe(String.class,"name");
+                String dName = d.getSafe(String.class, "name");
                 if( aName.equals(dName) ) {
-                    attrsSrc.set(i,d);
+                    attrsSrc.set(i, d);
                     attrsDecomp.remove(j);
                     break;
                 }
             }
         }
         attrsSrc.addAll(attrsDecomp);
-        cd.putList(ClassData.class,"attributes",attrsSrc);
+        cd.putList(ClassData.class, "attributes", attrsSrc);
         cd.sort();
         return cd;
     }
@@ -963,8 +947,9 @@ public class Code extends Attribute implements AttributeListListener {
         List<ClassData> pend = new ArrayList<ClassData>(history_);
         history_.clear();
         for(ClassData cd:pend) {
-            if( cd.containsKey("source") ) compile(cd.get(String.class,
-                    "source"), cd.get(ClassData.class, "replacements"));
+            if( cd.containsKey("source") ) compile(
+                    cd.get(String.class, "source"),
+                    cd.get(ClassData.class, "replacements"));
             else
                 appendCode(IO.decode(cd.get(String.class, "bytes")));
         }
@@ -976,6 +961,7 @@ public class Code extends Attribute implements AttributeListListener {
      * 
      * @return the representation
      */
+    @Override
     public ClassData toClassData() {
         ClassData cd = makeClassData();
         cd.putList(ClassData.class, "build", history_);

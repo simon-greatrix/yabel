@@ -17,6 +17,7 @@ public enum CodeU1U2 implements CodeOperand {
     /** Append a single byte */
     U1 {
         /** {@inheritDoc} */
+        @Override
         protected void write(CompilerOutput code, int i) {
             code.appendU1((byte) i);
         }
@@ -24,6 +25,7 @@ public enum CodeU1U2 implements CodeOperand {
     /** Append a two byte unsigned value */
     U2 {
         /** {@inheritDoc} */
+        @Override
         protected void write(CompilerOutput code, int i) {
             code.appendU2(i);
         }
@@ -31,6 +33,7 @@ public enum CodeU1U2 implements CodeOperand {
     /** Append a 4 byte signed value */
     S4 {
         /** {@inheritDoc} */
+        @Override
         protected void write(CompilerOutput code, int i) {
             code.appendS4(i);
         }
@@ -41,7 +44,7 @@ public enum CodeU1U2 implements CodeOperand {
     public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
         if( toks.size() > 3 )
             throw new YabelWrongTokenCountException(toks, 1, "datum");
-        int i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
+        int i = CompilerOutput.getInt(toks.get(2), toks.get(0));
         write(code, i);
     }
 

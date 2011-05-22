@@ -1,9 +1,6 @@
 package yabel;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
 /**
@@ -191,6 +188,7 @@ public class SwitchData implements Iterable<Entry<Integer, String>> {
      * 
      * @return the iterator
      */
+    @Override
     public Iterator<Entry<Integer, String>> iterator() {
         Map<Integer, String> map = Collections.unmodifiableMap(data_);
         return map.entrySet().iterator();

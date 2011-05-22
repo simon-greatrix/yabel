@@ -1,16 +1,15 @@
 package yabel.attributes;
 
-import yabel.ClassData;
-import yabel.io.IO;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 
+import yabel.ClassData;
 import yabel.constants.Constant;
 import yabel.constants.ConstantNumber;
 import yabel.constants.ConstantPool;
 import yabel.constants.ConstantString;
-
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import yabel.io.IO;
 
 /**
  * A ConstantValue attribute.
@@ -78,7 +77,8 @@ public class ConstantValue extends Attribute {
             value_ = new ConstantString(cp, (String) v);
         } else
             throw new IllegalArgumentException(
-                "ConstantValue must be String or Number, not class " + v.getClass());
+                    "ConstantValue must be String or Number, not class "
+                            + v.getClass());
     }
 
 
@@ -135,8 +135,8 @@ public class ConstantValue extends Attribute {
         super(cp, Attribute.ATTR_CONSTANT_VALUE);
         int len = IO.readS4(input);
         if( len != 2 )
-            throw new IOException(
-                    "Length of ConstantValue attribute is " + len + " not 2");
+            throw new IOException("Length of ConstantValue attribute is " + len
+                    + " not 2");
         int val = IO.readU2(input);
         value_ = cp.get(val);
     }

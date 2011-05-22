@@ -1,22 +1,12 @@
 package yabel.code;
 
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 import yabel.ClassBuilder;
-import yabel.ClassData;
 import yabel.Field;
 import yabel.OpCodes;
-import yabel.constants.Constant;
-import yabel.constants.ConstantClass;
-import yabel.constants.ConstantFieldRef;
-import yabel.constants.ConstantInterfaceMethodRef;
-import yabel.constants.ConstantMethodRef;
-import yabel.constants.ConstantNumber;
-import yabel.constants.ConstantPool;
-import yabel.constants.ConstantString;
+import yabel.code.operand.CodeVar.Var;
+import yabel.constants.*;
 import yabel.io.IO;
 
 /**
@@ -30,20 +20,13 @@ public class CompilerOutput {
     /**
      * Get an integer.
      * 
-     * @param cd
-     *            the replacements.
      * @param fld
      *            the field to look up
      * @param raw
      *            the raw text for the op-code
      * @return the integer
      */
-    public static int getInt(ClassData cd, String fld, String raw) {
-        String r = CodeTokenizer.isReplacement(fld);
-        if( r != null ) {
-            Integer i = cd.getSafe(Integer.class, r);
-            return i.intValue();
-        }
+    public static int getInt(String fld, String raw) {
         try {
             return Integer.parseInt(fld);
         } catch (NumberFormatException nfe) {
@@ -70,6 +53,12 @@ public class CompilerOutput {
 
     /** Flag indicating if the last op was a WIDE */
     private boolean lastWasWide_ = false;
+
+    /** Map of variable name to variable declaration */
+    private final Map<String, Var> name2var_ = new HashMap<String, Var>();
+
+    /** Map of variable slot to variable declaration */
+    private final Map<Integer, Var> index2var_ = new HashMap<Integer, Var>();
 
 
     /**
@@ -122,26 +111,6 @@ public class CompilerOutput {
 
 
     /**
-     * Append a WIDE instruction, unless the previous instruction was a WIDE
-     * added by this method.
-     */
-    public void appendWide() {
-        if( !lastWasWide_ ) output_.write(OpCodes.WIDE);
-        lastWasWide_ = true;
-    }
-
-
-    /**
-     * Was the last operand a WIDE?
-     * 
-     * @return true if last was wide
-     */
-    public boolean wasLastWide() {
-        return lastWasWide_;
-    }
-
-
-    /**
      * Append a single byte to the code currently being compiled.
      * 
      * @param b
@@ -162,6 +131,16 @@ public class CompilerOutput {
     public void appendU2(int i) {
         IO.writeU2(output_, i);
         lastWasWide_ = false;
+    }
+
+
+    /**
+     * Append a WIDE instruction, unless the previous instruction was a WIDE
+     * added by this method.
+     */
+    public void appendWide() {
+        if( !lastWasWide_ ) output_.write(OpCodes.WIDE);
+        lastWasWide_ = true;
     }
 
 
@@ -194,6 +173,82 @@ public class CompilerOutput {
     }
 
 
+    private String currentVars() {
+        Var[] vars = index2var_.values().toArray(new Var[0]);
+        Arrays.sort(vars, new Comparator<Var>() {
+            @Override
+            public int compare(Var o1, Var o2) {
+                return o1.getIndex() - o2.getIndex();
+            }
+        });
+
+        StringBuilder buf = new StringBuilder();
+        for(Var v:vars) {
+            buf.append(", ").append(v.getIndex()).append('=').append(
+                    v.getName());
+        }
+        return buf.toString().substring(2);
+    }
+
+
+    /**
+     * Define a variable
+     * 
+     * @param index
+     *            the slot used by the variable or -1
+     * @param name
+     *            the variable's name
+     * @param type
+     *            the variable's type
+     */
+    public void defineVariable(int index, String name, String type) {
+        Integer index1, index2;
+        int isDouble = Var.isDouble(type) ? 1 : 0;
+        if( index != -1 ) {
+            // explicit index
+            index1 = Integer.valueOf(index);
+            index2 = Integer.valueOf(index + isDouble);
+
+            Var v = index2var_.get(index1);
+            if( v != null )
+                throw new YabelBadVariableException("Cannot define variable \""
+                        + name + "\" of type " + type + " at " + index
+                        + " as this variable slot is in use."
+                        + "\nCurrent variables are [" + currentVars() + "]");
+
+            v = index2var_.get(index2);
+            if( v != null )
+                throw new YabelBadVariableException("Cannot define variable \""
+                        + name + "\" of type " + type + " at " + index
+                        + " as it requires a double width slot and slot "
+                        + (index + 1) + " is in use.\nCurrent variables are ["
+                        + currentVars() + "]");
+        } else {
+            // find available slot
+            int i = 0;
+            while( true ) {
+                index1 = Integer.valueOf(i);
+                Var v = index2var_.get(index1);
+                if( v == null ) {
+                    index2 = Integer.valueOf(i + isDouble);
+                    v = index2var_.get(index2);
+                    if( v == null ) break;
+
+                    i += 2;
+                } else {
+                    i += v.isDouble() ? 2 : 1;
+                }
+            }
+        }
+
+        // create variable and store it
+        Var var = new Var(index1.intValue(), name, type);
+
+        name2var_.put(name, var);
+        index2var_.put(index1, var);
+    }
+
+
     /**
      * Finalize the code being created. Finalization involves populating all the
      * jump destinations.
@@ -212,7 +267,7 @@ public class CompilerOutput {
                 int here = use.location_;
                 if( use.width_ == 2 ) {
                     // verify 2 byte offset is possible
-                    if( jump < Short.MIN_VALUE || jump > Short.MAX_VALUE ) {
+                    if( (jump < Short.MIN_VALUE) || (jump > Short.MAX_VALUE) ) {
                         throw new YabelLabelException(
                                 "Cannot jump distance of " + jump
                                         + " with 2-byte offset.");
@@ -230,6 +285,16 @@ public class CompilerOutput {
         }
 
         return code_;
+    }
+
+
+    /**
+     * Get all the labels used in the compiled code.
+     * 
+     * @return all the labels
+     */
+    public Collection<Label> getAllLabels() {
+        return Collections.unmodifiableCollection(labels_.values());
     }
 
 
@@ -422,29 +487,6 @@ public class CompilerOutput {
 
 
     /**
-     * Resolve a location against this output. Absolute locations are unchanged.
-     * Named locations are only fixed when the output is complete.
-     * 
-     * @param location
-     *            the location - either a name of an address
-     * @return a resolved location
-     */
-    public Location resolve(Location location) {
-        // Labels are unchanged
-        if( location instanceof Label ) return location;
-        
-        // replace named locations with labels
-        if( location instanceof NamedLocation ) {
-            NamedLocation loc = (NamedLocation) location;
-            String name = loc.getName();
-            return getLabel(name);
-        }
-                
-        return location;
-    }
-
-
-    /**
      * Get a label's location by its name
      * 
      * @param lbl
@@ -498,12 +540,51 @@ public class CompilerOutput {
 
 
     /**
+     * Get the slot for a variable
+     * 
+     * @param name
+     *            the variable's name
+     * @param raw
+     *            the statement
+     * @return the slot
+     */
+    public int getVariable(String name, String raw) {
+        Var v = name2var_.get(name);
+        if( v != null ) return v.getIndex();
+        return getInt(name, raw);
+    }
+
+
+    /**
      * Reset the output to begin compilation from the beginning.
      */
     public void reset() {
         code_ = null;
         output_.reset();
         labels_.clear();
+    }
+
+
+    /**
+     * Resolve a location against this output. Absolute locations are unchanged.
+     * Named locations are only fixed when the output is complete.
+     * 
+     * @param location
+     *            the location - either a name of an address
+     * @return a resolved location
+     */
+    public Location resolve(Location location) {
+        // Labels are unchanged
+        if( location instanceof Label ) return location;
+
+        // replace named locations with labels
+        if( location instanceof NamedLocation ) {
+            NamedLocation loc = (NamedLocation) location;
+            String name = loc.getName();
+            return getLabel(name);
+        }
+
+        return location;
     }
 
 
@@ -544,16 +625,47 @@ public class CompilerOutput {
 
 
     /**
-     * Get all the labels used in the compiled code.
+     * Undefine a variable
      * 
-     * @return all the labels
+     * @param name
+     *            the variable to undefine
      */
-    public Collection<Label> getAllLabels() {
-        return Collections.unmodifiableCollection(labels_.values());
+    public void undefineVariable(String name) {
+        Var v = name2var_.remove(name);
+        if( v != null ) {
+            index2var_.remove(Integer.valueOf(v.getIndex()));
+            return;
+        }
+
+        // maybe we have been given an index
+        Integer ind;
+        try {
+            ind = new Integer(name);
+        } catch (NumberFormatException nfe) {
+            throw new YabelBadVariableException("Variable \"" + name
+                    + "\" cannot be identified. Current variables are: ["
+                    + currentVars() + "]");
+        }
+
+        v = index2var_.remove(ind);
+        if( v != null ) {
+            name2var_.remove(v.getName());
+            return;
+        }
+
+        // it was a number, but it wasn't defined
+        throw new YabelBadVariableException("Variable \"" + name
+                + "\" cannot be identified. Current variables are: ["
+                + currentVars() + "]");
     }
 
 
-    public void setVariable(int index, String name) {
-        // TODO
+    /**
+     * Was the last operand a WIDE?
+     * 
+     * @return true if last was wide
+     */
+    public boolean wasLastWide() {
+        return lastWasWide_;
     }
 }

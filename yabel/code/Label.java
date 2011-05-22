@@ -28,7 +28,7 @@ class Label extends NamedLocation {
     /** {@inheritDoc} */
     @Override
     public void requirePlaced() {
-        if( ! isSet() )
+        if( !isSet() )
             throw new YabelLabelException("Label \"" + id_
                     + "\" is not located");
     }

@@ -1,14 +1,13 @@
 package yabel.attributes;
 
-import yabel.ClassData;
-import yabel.io.IO;
-
-import yabel.constants.ConstantPool;
-import yabel.constants.ConstantUtf8;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import yabel.ClassData;
+import yabel.constants.ConstantPool;
+import yabel.constants.ConstantUtf8;
+import yabel.io.IO;
 
 /**
  * The name of the source file that a class was compiled from.
@@ -20,7 +19,7 @@ public class SourceFileAttribute extends Attribute {
     /** The Utf8 constant that holds the source file name */
     private ConstantUtf8 source_;
 
-    
+
     /**
      * Create a marker attribute from its specification
      * 
@@ -30,8 +29,8 @@ public class SourceFileAttribute extends Attribute {
      *            the class data defining this attribute
      */
     public SourceFileAttribute(ConstantPool cp, ClassData cd) {
-        super(cp,cd);
-        String sourceFile = cd.getSafe(String.class,"source");
+        super(cp, cd);
+        String sourceFile = cd.getSafe(String.class, "source");
         source_ = new ConstantUtf8(cp, sourceFile);
     }
 
@@ -48,8 +47,8 @@ public class SourceFileAttribute extends Attribute {
         super(cp, Attribute.ATTR_SOURCE_FILE);
         int len = IO.readS4(input);
         if( len != 2 )
-            throw new IOException(
-                    "SourceFile attribute has length " + len + " not 2");
+            throw new IOException("SourceFile attribute has length " + len
+                    + " not 2");
         int val = IO.readU2(input);
         source_ = cp.validate(val, ConstantUtf8.class);
     }

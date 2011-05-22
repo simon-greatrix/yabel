@@ -12,6 +12,7 @@ public class YabelDecompileException extends YabelException {
     /** serial version UID */
     private static final long serialVersionUID = -373007230970501876L;
 
+
     /**
      * Problem when decompiling byte-code.
      * 

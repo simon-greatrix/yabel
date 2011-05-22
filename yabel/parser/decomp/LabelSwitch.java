@@ -1,9 +1,6 @@
 package yabel.parser.decomp;
 
-import java.util.Collections;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
 import yabel.SwitchData;
@@ -214,6 +211,7 @@ public class LabelSwitch implements Iterable<Entry<Integer, Ref4>>, Source {
      * 
      * @return the iterator
      */
+    @Override
     public Iterator<Entry<Integer, Ref4>> iterator() {
         Map<Integer, Ref4> map = Collections.unmodifiableMap(data_);
         return map.entrySet().iterator();

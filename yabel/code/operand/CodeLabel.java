@@ -14,6 +14,49 @@ import yabel.code.YabelWrongTokenCountException;
  * 
  */
 abstract public class CodeLabel implements CodeOperand {
+    /** Two byte offset value */
+    final static CodeLabel HASH = new CodeLabel() {
+        @Override
+        protected void compile(CompilerOutput code, String label) {
+            code.compileJump(label, 2);
+        }
+
+
+        @Override
+        public String name() {
+            return "#";
+        }
+    };
+
+    /** Four byte offset value */
+    final static CodeLabel HASH4 = new CodeLabel() {
+        @Override
+        protected void compile(CompilerOutput code, String label) {
+            code.compileJump(label, 4);
+        }
+
+
+        @Override
+        public String name() {
+            return "#4";
+        }
+    };
+
+    /** Place label */
+    final static CodeLabel AT = new CodeLabel() {
+        @Override
+        protected void compile(CompilerOutput code, String label) {
+            code.setLabel(label);
+        }
+
+
+        @Override
+        public String name() {
+            return "@";
+        }
+    };
+
+
     /**
      * Get the operations supported
      * 
@@ -22,42 +65,6 @@ abstract public class CodeLabel implements CodeOperand {
     public static CodeOperand[] values() {
         return new CodeOperand[] { HASH, HASH4, AT };
     }
-
-    /** Two byte offset value */
-    final static CodeLabel HASH = new CodeLabel() {
-        protected void compile(CompilerOutput code, String label) {
-            code.compileJump(label, 2);
-        }
-
-
-        public String name() {
-            return "#";
-        }
-    };
-
-    /** Four byte offset value */
-    final static CodeLabel HASH4 = new CodeLabel() {
-        protected void compile(CompilerOutput code, String label) {
-            code.compileJump(label, 4);
-        }
-
-
-        public String name() {
-            return "#4";
-        }
-    };
-
-    /** Place label */
-    final static CodeLabel AT = new CodeLabel() {
-        protected void compile(CompilerOutput code, String label) {
-            code.setLabel(label);
-        }
-
-
-        public String name() {
-            return "@";
-        }
-    };
 
 
     /** {@inheritDoc} */

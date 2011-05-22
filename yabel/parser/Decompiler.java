@@ -1,39 +1,19 @@
 package yabel.parser;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.Map.Entry;
 
 import yabel.ClassData;
 import yabel.OpCodes;
 import yabel.SwitchData;
-import yabel.attributes.Attribute;
-import yabel.attributes.LineNumberTable;
+import yabel.attributes.*;
 import yabel.attributes.LineNumberTable.LNV;
+import yabel.attributes.LocalVariableTable.Scope;
 import yabel.code.Code;
 import yabel.code.Handler;
-import yabel.constants.Constant;
-import yabel.constants.ConstantClass;
-import yabel.constants.ConstantNumber;
-import yabel.constants.ConstantPool;
-import yabel.constants.ConstantRef;
-import yabel.constants.ConstantString;
+import yabel.constants.*;
 import yabel.io.IO;
-import yabel.parser.decomp.Label;
-import yabel.parser.decomp.LabelList;
-import yabel.parser.decomp.LabelSwitch;
-import yabel.parser.decomp.LabeledHandler;
-import yabel.parser.decomp.Multi;
-import yabel.parser.decomp.Ops;
-import yabel.parser.decomp.Simple;
-import yabel.parser.decomp.Source;
-import yabel.parser.decomp.VarDef;
-import yabel.parser.decomp.VarRef;
-import yabel.parser.decomp.VariableSet;
+import yabel.parser.decomp.*;
 import yabel.parser.decomp.Label.Ref4;
 
 /**
@@ -72,7 +52,7 @@ public class Decompiler implements ParserListener {
     public static class Options {
         /** Include comments indicating location? */
         public boolean locationComments = true;
-        
+
         /** Are classes explicit or in the class data? */
         public boolean classInData = false;
 
@@ -136,6 +116,7 @@ public class Decompiler implements ParserListener {
     /** Line numbers in this code block */
     private final LineNumberTable lineNumbers_;
 
+
     /**
      * New decompiler for a given constant pool
      * 
@@ -147,11 +128,12 @@ public class Decompiler implements ParserListener {
         lineNumbers_ = new LineNumberTable(cp);
         List<ClassData> buildList = new ArrayList<ClassData>(1);
         buildList.add(build_);
-        build_.put("replacements",replacements_);
-        result_.put("name",Attribute.ATTR_CODE);
-        result_.putList(ClassData.class,"build",buildList);
+        build_.put("replacements", replacements_);
+        result_.put("name", Attribute.ATTR_CODE);
+        result_.putList(ClassData.class, "build", buildList);
         result_.putList(ClassData.class, "handlers", new ArrayList<ClassData>());
-        result_.putList(ClassData.class, "attributes", new ArrayList<ClassData>(2));
+        result_.putList(ClassData.class, "attributes",
+                new ArrayList<ClassData>(2));
     }
 
 
@@ -176,16 +158,29 @@ public class Decompiler implements ParserListener {
     public void addLineNumbers(LineNumberTable table) {
         for(LNV lnv:lineNumbers_) {
             Label l = labels_.getLabel(lnv.getStartPC());
-            if( l!=null ) l.removeName(lnv.toString());
+            if( l != null ) l.removeName(lnv.toString());
         }
-        
+
         for(LNV lnv:table) {
-            lineNumbers_.add(lnv.getStartPC(),lnv.getLine());
+            lineNumbers_.add(lnv.getStartPC(), lnv.getLine());
         }
-        
+
         for(LNV lnv:lineNumbers_) {
             Label l = labels_.createLabel(lnv.getStartPC());
             l.setDefaultName(lnv.toString());
+        }
+    }
+
+
+    /**
+     * Add local variable definitions.
+     * 
+     * @param table
+     *            table of definitions
+     */
+    public void addLocalVars(LocalVariableTable table) {
+        for(Scope v:table) {
+            varSet_.addScope(v);
         }
     }
 
@@ -348,7 +343,7 @@ public class Decompiler implements ParserListener {
         case OpCodes.WIDE: {
             int op = IO.readU1(buffer, 1);
             int v = IO.readU2(buffer, 2);
-            VarRef ref = varSet_.getRef(v, position);
+            Source ref = varSet_.getRef(v, position);
             opc.opCode_ = new Multi(OpCodes.getOpName(op), ref);
             return;
         }
@@ -541,31 +536,39 @@ public class Decompiler implements ParserListener {
         StringBuilder buf = new StringBuilder();
         // Minimal pretty printing: labels are out-dented and there is a
         // blank line after a branch.
-        String prefix1, prefix2;
+        String prefix;
         if( options_.locationComments ) {
-            prefix1 = "            ";
+            prefix = "            ";
         } else {
-            prefix1 = "";
+            prefix = "";
         }
-        
+
         for(Decompiler.OpCode opc:decomp_) {
-            
+
+            // print labels at this location
             Label lbl = labels_.getLabel(opc.location_);
             if( lbl != null ) {
-                buf.append(prefix1).append(lbl.source()).append('\n');
+                buf.append(prefix).append(lbl.source()).append('\n');
             }
-            List<VarDef> defs = varSet_.getDefs(opc.location_);
+
+            // print scope defs at this location
+            List<Source> defs = varSet_.getDefs(opc.location_);
             if( !defs.isEmpty() ) {
-                for(VarDef v:defs) {
-                    buf.append(prefix1).append("    ").append(v.source());
+                for(Source v:defs) {
+                    buf.append(prefix).append(v.source()).append('\n');
                 }
             }
+
+            // insert location comment if applicable and increase indents
             String opSrc = opc.opCode_.source();
             if( options_.locationComments ) {
-                buf.append(String.format("/* %5d */ ",Integer.valueOf(opc.location_)));
-                opSrc=opSrc.replaceAll("\n","\n        "+prefix1);
+                buf.append(String.format("/* %5d */ ",
+                        Integer.valueOf(opc.location_)));
+                opSrc = opSrc.replaceAll("\n", "\n        " + prefix);
             }
             buf.append("    ").append(opSrc).append('\n');
+
+            // add blank line on branch
             Byte b = Byte.valueOf(opc.code_);
             if( Parser.OP_EXIT.contains(b) || Parser.BRANCH_OPS.contains(b) )
                 buf.append('\n');
@@ -583,16 +586,17 @@ public class Decompiler implements ParserListener {
         }
 
         // attributes
-        List<ClassData> attrs = result_.getList(ClassData.class,"attributes");
+        List<ClassData> attrs = result_.getList(ClassData.class, "attributes");
         Iterator<ClassData> iter = attrs.iterator();
         while( iter.hasNext() ) {
             ClassData cd = iter.next();
-            if( Attribute.ATTR_LINE_NUMBER_TABLE.equals(cd.get(String.class,"name")) ) {
+            if( Attribute.ATTR_LINE_NUMBER_TABLE.equals(cd.get(String.class,
+                    "name")) ) {
                 iter.remove();
             }
         }
-        if(! lineNumbers_.isEmpty() ) attrs.add(lineNumbers_.toClassData());
-        
+        if( !lineNumbers_.isEmpty() ) attrs.add(lineNumbers_.toClassData());
+
         replacements_.sort();
         return result_;
     }
@@ -614,6 +618,7 @@ public class Decompiler implements ParserListener {
      * @param length
      *            the length of the op-code
      */
+    @Override
     public void opCodeFinish(int position, byte[] buffer, int length) {
         Decompiler.OpCode opc = new OpCode();
         decomp_.add(opc);
@@ -668,8 +673,8 @@ public class Decompiler implements ParserListener {
         Parser parser = new Parser(this);
         decomp_.clear();
         replacements_.clear();
-        for(int i = 0;i < code.length;i++) {
-            parser.parse(code[i]);
+        for(byte element:code) {
+            parser.parse(element);
         }
     }
 
@@ -724,7 +729,7 @@ public class Decompiler implements ParserListener {
                         required = 3;
                 }
             }
-            String sep=(required>2)?"\n:":":";
+            String sep = (required > 2) ? "\n:" : ":";
             if( required == 3 ) buf.append(cls).append(sep);
             buf.append(name);
             if( required >= 2 ) buf.append(sep).append(type);

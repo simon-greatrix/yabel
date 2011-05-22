@@ -53,7 +53,7 @@ public class CodeLDC implements CodeOperand {
 
 
     private CodeLDC() {
-    // private constructor
+        // private constructor
     }
 
 
@@ -91,11 +91,12 @@ public class CodeLDC implements CodeOperand {
             break;
         }
         default: // wrong
-            throw new YabelWrongTokenCountException(toks, 1, "replacement", 2, "type and value");
+            throw new YabelWrongTokenCountException(toks, 1, "replacement", 2,
+                    "type and value");
         }
 
         // try for a bare int
-        if( i == -1 ) i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
+        if( i == -1 ) i = CompilerOutput.getInt(toks.get(2), toks.get(0));
         compile(code, i);
     }
 

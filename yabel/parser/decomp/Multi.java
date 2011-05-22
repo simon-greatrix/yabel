@@ -18,7 +18,7 @@ public class Multi implements Source {
      */
     public Multi(Object... source) {
         source_ = new Source[source.length];
-        for(int i=0;i<source.length;i++) {
+        for(int i = 0;i < source.length;i++) {
             Object o = source[i];
             if( o instanceof Source ) {
                 source_[i] = (Source) o;
@@ -34,13 +34,14 @@ public class Multi implements Source {
      * 
      * @see yabel.parser.decomp.Source#source()
      */
+    @Override
     public String source() {
         StringBuilder buf = new StringBuilder();
         String sep = ":";
-        if( source_.length > 3 ) sep="\n:";
-        for(int i=0;i<source_.length;i++) {
+        if( source_.length > 3 ) sep = "\n:";
+        for(int i = 0;i < source_.length;i++) {
             Source s = source_[i];
-            if( i>0 ) buf.append(sep);
+            if( i > 0 ) buf.append(sep);
             buf.append(s.source());
         }
         return buf.toString();

@@ -28,7 +28,7 @@ public class AttributeList {
 
     /** Create an empty attribute list */
     public AttributeList() {
-    // do nothing
+        // do nothing
     }
 
 
@@ -67,8 +67,8 @@ public class AttributeList {
 
 
     /**
-     * Add an attribute into this list. Having multiple attributes of the same type
-     * may not be a good idea.
+     * Add an attribute into this list. Having multiple attributes of the same
+     * type may not be a good idea.
      * 
      * @param attr
      *            the attribute
@@ -180,8 +180,8 @@ public class AttributeList {
             return new SourceFileAttribute(cp, input);
         if( idName.equals(Attribute.ATTR_LINE_NUMBER_TABLE) )
             return new LineNumberTable(cp, input);
-        if( idName.equals(Attribute.ATTR_LOCAL_VARIABLE_TABLE) ) 
-            return new LocalVariableTable(cp,input);
+        if( idName.equals(Attribute.ATTR_LOCAL_VARIABLE_TABLE) )
+            return new LocalVariableTable(cp, input);
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
             return new MarkerAttribute(cp, input);
 
@@ -216,7 +216,7 @@ public class AttributeList {
         if( idName.equals(Attribute.ATTR_LINE_NUMBER_TABLE) )
             return new LineNumberTable(cp, input);
         if( idName.equals(Attribute.ATTR_LOCAL_VARIABLE_TABLE) )
-            return new LocalVariableTable(cp,input);
+            return new LocalVariableTable(cp, input);
         if( idName.equals(Attribute.ATTR_DEPRECATED) )
             return new MarkerAttribute(cp, idName, input);
 

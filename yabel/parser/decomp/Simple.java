@@ -35,6 +35,7 @@ public class Simple implements Source {
 
 
     /** {@inheritDoc} */
+    @Override
     public String source() {
         return source_;
     }

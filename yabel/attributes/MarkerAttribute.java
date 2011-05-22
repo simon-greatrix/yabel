@@ -1,13 +1,12 @@
 package yabel.attributes;
 
-import yabel.ClassData;
-import yabel.io.IO;
-
-import yabel.constants.ConstantPool;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+
+import yabel.ClassData;
+import yabel.constants.ConstantPool;
+import yabel.io.IO;
 
 /**
  * A simple attribute that acts as a marker. Examples are "Synthetic" and
@@ -57,7 +56,7 @@ public class MarkerAttribute extends Attribute {
      */
     MarkerAttribute(ConstantPool cp, String idName, InputStream input)
             throws IOException {
-        super(cp,idName);
+        super(cp, idName);
         int len = IO.readS4(input);
         if( len != 0 )
             throw new IOException("Marker attribute " + idName

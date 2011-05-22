@@ -44,7 +44,7 @@ public enum CodeLoadStore implements CodeOperand {
         /** {@inheritDoc} */
         @Override
         protected void compile(CompilerOutput code, int i) {
-            if( (i < 0x100) && ! code.wasLastWide() ) {
+            if( (i < 0x100) && !code.wasLastWide() ) {
                 code.appendU1(OpCodes.RET);
                 code.appendU1((byte) i);
             } else {
@@ -81,16 +81,6 @@ public enum CodeLoadStore implements CodeOperand {
     }
 
 
-    /** {@inheritDoc} */
-    @Override
-    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
-        if( toks.size() > 3 )
-            throw new YabelWrongTokenCountException(toks, 1, "variable");
-        int i = CompilerOutput.getInt(cd, toks.get(2), toks.get(0));
-        compile(code, i);
-    }
-
-
     /**
      * Compile the instruction given the local variable ID
      * 
@@ -114,7 +104,7 @@ public enum CodeLoadStore implements CodeOperand {
             code.appendU1(op3_);
             break;
         default:
-            if( (i < 0x100) && ! code.wasLastWide() ) {
+            if( (i < 0x100) && !code.wasLastWide() ) {
                 code.appendU1(op_);
                 code.appendU1((byte) i);
             } else {
@@ -123,5 +113,15 @@ public enum CodeLoadStore implements CodeOperand {
                 code.appendU2(i);
             }
         }
+    }
+
+
+    /** {@inheritDoc} */
+    @Override
+    public void compile(CompilerOutput code, List<String> toks, ClassData cd) {
+        if( toks.size() > 3 )
+            throw new YabelWrongTokenCountException(toks, 1, "variable");
+        int i = code.getVariable(toks.get(2), toks.get(0));
+        compile(code, i);
     }
 }

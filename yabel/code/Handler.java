@@ -16,6 +16,13 @@ import yabel.io.IO;
  * 
  */
 public class Handler {
+    private static Location getLoc(CompilerOutput out, ClassData cd, String name) {
+        String id = cd.get(String.class, name);
+        if( id != null ) return out.getLabel(id);
+        Integer loc = cd.getSafe(Integer.class, name);
+        return new Location(loc.intValue());
+    }
+
     /** Exception type caught */
     final ConstantClass catchType_;
 
@@ -40,9 +47,9 @@ public class Handler {
      *            class data representation
      */
     public Handler(ConstantPool cp, CompilerOutput out, ClassData cd) {
-        startPC_ = getLoc(out,cd,"start");
-        endPC_ = getLoc(out,cd,"end");
-        handlerPC_ = getLoc(out,cd,"handler");
+        startPC_ = getLoc(out, cd, "start");
+        endPC_ = getLoc(out, cd, "end");
+        handlerPC_ = getLoc(out, cd, "handler");
 
         String type = cd.get(String.class, "type");
         if( type == null ) {
@@ -50,14 +57,6 @@ public class Handler {
         } else {
             catchType_ = new ConstantClass(cp, type);
         }
-    }
-    
-    
-    private static Location getLoc(CompilerOutput out, ClassData cd, String name) {
-        String id = cd.get(String.class,name);
-        if( id!=null ) return out.getLabel(id);
-        Integer loc = cd.getSafe(Integer.class, name);
-        return new Location(loc.intValue());
     }
 
 
@@ -70,9 +69,9 @@ public class Handler {
      *            stream
      */
     public Handler(ConstantPool cp, InputStream input) throws IOException {
-        startPC_ = new Location( IO.readU2(input) );
-        endPC_ = new Location( IO.readU2(input) );
-        handlerPC_ = new Location( IO.readU2(input) );
+        startPC_ = new Location(IO.readU2(input));
+        endPC_ = new Location(IO.readU2(input));
+        handlerPC_ = new Location(IO.readU2(input));
 
         int type = IO.readU2(input);
         if( type != 0 ) {
@@ -170,7 +169,7 @@ public class Handler {
      */
     public ClassData toClassData(ConstantPool cp) {
         ClassData cd = new ClassData();
-        
+
         cd.put("end", endPC_.getIdentifier());
         cd.put("start", startPC_.getIdentifier());
         cd.put("handler", handlerPC_.getIdentifier());

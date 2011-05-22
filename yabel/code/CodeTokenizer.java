@@ -17,9 +17,6 @@ import yabel.ClassData;
  * 
  */
 public class CodeTokenizer implements Iterator<List<String>> {
-    
-    /** Match a token */
-    private static final Pattern TOKEN = Pattern.compile("\\s*(\\S+(\\s*:[^\\s:]*)*)");
 
     /** Internal sub-tokenizer state */
     private enum State {
@@ -32,6 +29,9 @@ public class CodeTokenizer implements Iterator<List<String>> {
         /** Sub-tokenizer may have more tokens */
         RETRY
     }
+
+    /** Match a token */
+    private static final Pattern TOKEN = Pattern.compile("\\s*(\\S+(\\s*:[^\\s:]*)*)");
 
 
     /**
@@ -176,6 +176,7 @@ public class CodeTokenizer implements Iterator<List<String>> {
 
 
     /** {@inheritDoc} */
+    @Override
     public boolean hasNext() {
         State b;
         do {
@@ -194,15 +195,15 @@ public class CodeTokenizer implements Iterator<List<String>> {
         }
 
         token_.clear();
-        
+
         // Attempt to find the next token
-        if( ! matcher_.find() ) return State.FINISHED;
-        
+        if( !matcher_.find() ) return State.FINISHED;
+
         // have raw token
         String raw = matcher_.group(1);
         token_.add(raw);
         raw = raw.replaceAll("\\s+:", ":");
-        
+
         // special case - if we just have {...} then we have to tokenize
         // the expansion
         int s = raw.indexOf('{');
@@ -238,6 +239,7 @@ public class CodeTokenizer implements Iterator<List<String>> {
 
 
     /** {@inheritDoc} */
+    @Override
     public List<String> next() {
         if( subTokenizers_.isEmpty() ) {
             if( ret_.isEmpty() ) throw new NoSuchElementException();
@@ -248,6 +250,7 @@ public class CodeTokenizer implements Iterator<List<String>> {
 
 
     /** Not supported */
+    @Override
     public void remove() {
         throw new UnsupportedOperationException();
     }

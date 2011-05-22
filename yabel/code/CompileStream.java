@@ -12,8 +12,7 @@ import yabel.parser.ParserListener;
  * @author Simon Greatrix
  * 
  */
-class CompileStream extends ByteArrayOutputStream implements
-        ParserListener {
+class CompileStream extends ByteArrayOutputStream implements ParserListener {
     /** The parser that interprets the byte-code */
     private Parser parser_;
 
@@ -45,8 +44,9 @@ class CompileStream extends ByteArrayOutputStream implements
      * @param l
      *            ignored
      */
+    @Override
     public void opCodeFinish(int i, byte[] b, int l) {
-    // do nothing
+        // do nothing
     }
 
 
@@ -60,17 +60,17 @@ class CompileStream extends ByteArrayOutputStream implements
 
     /** {@inheritDoc} */
     @Override
-    public synchronized void write(byte[] b, int off, int len) {
-        for(int i=0;i<len;i++) {
-            write(b[i+off]);
-        }
+    public synchronized void write(byte[] b) {
+        write(b, 0, b.length);
     }
 
 
     /** {@inheritDoc} */
     @Override
-    public synchronized void write(byte[] b) {
-        write(b,0,b.length);
+    public synchronized void write(byte[] b, int off, int len) {
+        for(int i = 0;i < len;i++) {
+            write(b[i + off]);
+        }
     }
 
 

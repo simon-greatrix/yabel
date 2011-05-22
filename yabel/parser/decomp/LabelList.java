@@ -16,16 +16,6 @@ public class LabelList {
 
 
     /**
-     * Get all the labels
-     * 
-     * @return the labels
-     */
-    public Collection<Label> getAllLabels() {
-        return Collections.unmodifiableCollection(labels_.values());
-    }
-
-
-    /**
      * Get or create a label at the specified position.
      * 
      * @param pos
@@ -40,6 +30,16 @@ public class LabelList {
             labels_.put(ipos, lbl);
         }
         return lbl;
+    }
+
+
+    /**
+     * Get all the labels
+     * 
+     * @return the labels
+     */
+    public Collection<Label> getAllLabels() {
+        return Collections.unmodifiableCollection(labels_.values());
     }
 
 
