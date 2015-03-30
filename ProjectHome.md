@@ -1,0 +1,1 @@
+A simpler way of creating and modifying Java classes at the byte-code level.
