@@ -5,12 +5,12 @@ import java.nio.charset.Charset;
 
 import org.xml.sax.SAXException;
 
-import yabel.Access;
 import yabel.ClassBuilder;
 import yabel.ClassData;
 import yabel.Method;
 import yabel.code.Code;
 import yabel.io.XMLDataReader;
+import yabel2.Access;
 
 public class Test {
 

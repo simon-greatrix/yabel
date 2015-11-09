@@ -29,6 +29,7 @@ public enum CodeInterface implements CodeOperand {
         }
     },
 
+
     /** Reference an interface method */
     INTERFACEMETHOD;
 

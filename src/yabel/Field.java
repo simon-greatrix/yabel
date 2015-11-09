@@ -10,6 +10,7 @@ import yabel.attributes.ConstantValue;
 import yabel.constants.ConstantPool;
 import yabel.constants.ConstantUtf8;
 import yabel.io.IO;
+import yabel2.Access;
 
 /**
  * Field in a class

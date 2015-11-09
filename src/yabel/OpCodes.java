@@ -406,6 +406,9 @@ public class OpCodes {
     public static final byte INSTANCEOF = (byte) 193;
 
     /** JVM op-code */
+    public static final byte INVOKEDYNAMIC = (byte) 186;
+
+    /** JVM op-code */
     public static final byte INVOKEINTERFACE = (byte) 185;
 
     /** JVM op-code */
@@ -621,7 +624,7 @@ public class OpCodes {
             "RET", "TABLESWITCH", "LOOKUPSWITCH", "IRETURN", "LRETURN",
             "FRETURN", "DRETURN", "ARETURN", "RETURN", "GETSTATIC",
             "PUTSTATIC", "GETFIELD", "PUTFIELD", "INVOKEVIRTUAL",
-            "INVOKESPECIAL", "INVOKESTATIC", "INVOKEINTERFACE", "", "NEW",
+            "INVOKESPECIAL", "INVOKESTATIC", "INVOKEINTERFACE", "INVOKEDYNAMIC", "NEW",
             "NEWARRAY", "ANEWARRAY", "ARRAYLENGTH", "ATHROW", "CHECKCAST",
             "INSTANCEOF", "MONITORENTER", "MONITOREXIT", "WIDE",
             "MULTIANEWARRAY", "IFNULL", "IFNONNULL", "GOTO_W", "JSR_W" };

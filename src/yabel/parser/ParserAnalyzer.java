@@ -6,7 +6,6 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.util.*;
 
-import yabel.Access;
 import yabel.Method;
 import yabel.OpCodes;
 import yabel.code.Code;
@@ -14,6 +13,7 @@ import yabel.code.Handler;
 import yabel.constants.ConstantPool;
 import yabel.constants.ConstantRef;
 import yabel.io.IO;
+import yabel2.Access;
 
 /**
  * Analyze a class and work out how many local variables and stack slots it

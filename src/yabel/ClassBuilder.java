@@ -11,6 +11,7 @@ import yabel.constants.ConstantClass;
 import yabel.constants.ConstantPool;
 import yabel.constants.ConstantUtf8;
 import yabel.io.IO;
+import yabel2.Access;
 
 /**
  * <p>
