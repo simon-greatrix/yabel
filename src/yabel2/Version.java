@@ -20,6 +20,8 @@ public enum Version {
     private static final Map<Integer,Version> CODE_TO_VERSION;
     private static final Map<String,Version> ID_TO_VERSION;
     
+    public static final Version CURRENT;
+    
     static {
         HashMap<Integer,Version> r2v = new HashMap<>();
         HashMap<Integer,Version> c2v = new HashMap<>();
@@ -32,6 +34,8 @@ public enum Version {
         REVISION_TO_VERSION = Collections.unmodifiableMap(r2v);
         ID_TO_VERSION = Collections.unmodifiableMap(n2v);
         CODE_TO_VERSION = Collections.unmodifiableMap(c2v);
+        
+        CURRENT = n2v.get(System.getProperty("java.vm.specification.version"));
     }
     
     public static Version forRevision(int v) {

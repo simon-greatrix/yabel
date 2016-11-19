@@ -9,7 +9,7 @@ import java.util.Map.Entry;
  * @author Simon Greatrix
  * 
  */
-public class SwitchData implements Iterable<Entry<Integer, String>> {
+public class SwitchData implements Iterable<Entry<Integer, String>>, Copyable<SwitchData> {
     /**
      * Representation of a case value and label
      * 
@@ -87,6 +87,21 @@ public class SwitchData implements Iterable<Entry<Integer, String>> {
      */
     public SwitchData(String dflt) {
         dflt_ = dflt;
+    }
+
+
+    /**
+     * Create a copy of this instance
+     * 
+     * @return a copy
+     */
+    @Override
+    public SwitchData copy() {
+        SwitchData copy = new SwitchData(dflt_);
+        copy.data_.putAll(data_);
+        copy.max_ = max_;
+        copy.min_ = min_;
+        return copy;
     }
 
 

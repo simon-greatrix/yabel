@@ -1,12 +1,9 @@
 package yabel2;
 
-import java.lang.reflect.Member;
-import java.lang.reflect.Modifier;
-import java.util.Collections;
+import static org.objectweb.asm.Opcodes.*;
+
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.objectweb.asm.Opcodes.*;
 
 /**
  * Access modifiers for fields, methods and classes
@@ -79,10 +76,30 @@ public class Access {
         for(int i = 0;i < names_.length;i++) {
             names_[i] = "(unknown " + i + ")";
         }
+        int allowed = 0;
         for(int i = 0;i < flags.length;i++) {
             int bit = bit(flags[i]);
             names_[bit] = names_[i];
             masks_.put(names_[i], Integer.valueOf(flags[i]));
+            allowed |= flags[i];
+        }
+        allowed_ = allowed;
+    }
+
+
+    /**
+     * Verify a modifier. Throws an IllegalArgumentException if it contains
+     * inappropriate bits.
+     * 
+     * @param m
+     *            the modifier
+     */
+    public void verify(int m) {
+        int b = m & ~allowed_;
+        if( b != 0 ) {
+            throw new IllegalArgumentException("Access modifier " + m
+                    + " contains " + b + " (" + Integer.toBinaryString(b)
+                    + ") which is not allowed here.");
         }
     }
 
@@ -150,5 +167,7 @@ public class Access {
     private final Map<String, Integer> masks_ = new HashMap<>();
 
     private final String[] names_ = new String[32];
+
+    private final int allowed_;
 
 }

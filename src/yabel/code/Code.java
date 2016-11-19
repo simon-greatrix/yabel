@@ -605,7 +605,7 @@ public class Code extends Attribute implements AttributeListListener {
      * <tr>
      * <td>&#35;4:property</td>
      * <td>Replaced with a U4 value indicating the location of the marker
-     * relative to the preceeding instruction. This can be used to implement
+     * relative to the preceding instruction. This can be used to implement
      * GOTO_W, JSR_W, TABLESWITCH and LOOKUPSWITCH</td>
      * </tr>
      * <tr>

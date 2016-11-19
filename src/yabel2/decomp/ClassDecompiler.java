@@ -121,37 +121,7 @@ public class ClassDecompiler extends ClassVisitor {
      * @return the class data representation
      */
     public ClassData toClassData() {
-        ClassData cd = new ClassData();
-        cd.put("access", Access.accessCode(access_ & ~Access.ACC_SUPER));
-        cd.put("name", thisClass_.getClassName().get());
-        cd.put("super", superClass_.getClassName().get());
-        cd.put("version", Integer.valueOf(version_));
-
-        // add interfaces
-        List<String> ifaces = new ArrayList<String>(interfaces_.size());
-        for(ConstantClass cc:interfaces_) {
-            ifaces.add(cc.getClassName().get());
-        }
-        cd.putList(String.class, "interfaces", ifaces);
-
-        // add fields
-        List<ClassData> fields = new ArrayList<ClassData>(fields_.size());
-        for(Field f:fields_) {
-            fields.add(f.toClassData());
-        }
-        cd.putList(ClassData.class, "fields", fields);
-
-        // add methods
-        List<ClassData> meths = new ArrayList<ClassData>(methods_.size());
-        for(Method m:methods_) {
-            meths.add(m.toClassData());
-        }
-        cd.putList(ClassData.class, "methods", meths);
-
-        // and the attributes
-        cd.putList(ClassData.class, "attributes", attrList_.toClassData());
-
-        return cd;
+        return data_.copy();
     }
    
 }

@@ -2,9 +2,8 @@ package yabel;
 
 import java.io.IOException;
 import java.io.StringWriter;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.TreeMap;
+import java.util.*;
+import java.util.Map.Entry;
 
 import yabel.io.ClassDataWriter;
 import yabel.io.XMLDataWriter;
@@ -15,7 +14,27 @@ import yabel.io.XMLDataWriter;
  * @author Simon Greatrix
  * 
  */
-public class ClassData extends LinkedHashMap<String, Object> {
+public class ClassData extends LinkedHashMap<String, Object> implements
+        Copyable<ClassData>, Iterable<Entry<String, Object>> {
+    protected static void checkValue(Object o) {
+        if( o == null ) return;
+        checkClass(o.getClass());
+    }
+
+
+    protected static void checkClass(Class<?> cl) {
+        if( cl == String.class ) return;
+        if( cl == Integer.class ) return;
+        if( cl == Float.class ) return;
+        if( cl == Long.class ) return;
+        if( cl == Double.class ) return;
+        if( cl == ClassData.class ) return;
+        if( cl == SwitchData.class ) return;
+        if( cl == TypedList.class ) return;
+        throw new AssertionError("Class " + cl.getName()
+                + " is not allowed in ClassData");
+    }
+
     /**
      * Representation of a key and value pair
      * 
@@ -54,8 +73,6 @@ public class ClassData extends LinkedHashMap<String, Object> {
         }
     }
 
-
-
     /**
      * Holder for a list that knows the type of the list contents
      * 
@@ -64,7 +81,7 @@ public class ClassData extends LinkedHashMap<String, Object> {
      * @param <T>
      *            the type of the list contents
      */
-    public static class TypedList<T> {
+    public static class TypedList<T> implements Copyable<TypedList<T>> {
         /** Class for the list contents */
         final Class<T> clss_;
 
@@ -81,8 +98,25 @@ public class ClassData extends LinkedHashMap<String, Object> {
          *            the class of the list contents
          */
         public TypedList(List<T> list, Class<T> clss) {
+            checkClass(clss);
             list_ = list;
             clss_ = clss;
+        }
+
+
+        public TypedList<T> copy() {
+            ArrayList<T> list;
+            if( Copyable.class.isAssignableFrom(clss_) ) {
+                list = new ArrayList<T>(list_.size());
+                for(T t:list_) {
+                    @SuppressWarnings("unchecked")
+                    T t2 = (T) ((Copyable<T>) t).copy();
+                    list_.add(t2);
+                }
+            } else {
+                list = new ArrayList<T>(list_);
+            }
+            return new TypedList<T>(list, clss_);
         }
 
 
@@ -149,6 +183,20 @@ public class ClassData extends LinkedHashMap<String, Object> {
      */
     public ClassData(ClassData orig) {
         super(orig);
+    }
+
+
+    @Override
+    public ClassData copy() {
+        ClassData copy = new ClassData();
+        for(Entry<String, Object> entry:this) {
+            Object v = entry.getValue();
+            if( v instanceof Copyable<?> ) {
+                v = ((Copyable<?>) v).copy();
+            }
+            copy.putInternal(entry.getKey(), v);
+        }
+        return copy;
     }
 
 
@@ -274,14 +322,7 @@ public class ClassData extends LinkedHashMap<String, Object> {
     private Object putInternal(String key, Object value) {
         if( (key == null) || key.equals("") )
             throw new AssertionError("Key must be specified and not empty");
-        if( value != null ) {
-            if( !((value instanceof String) || (value instanceof Number)
-                    || (value instanceof SwitchData)
-                    || (value instanceof ClassData) || (value instanceof TypedList<?>)) ) {
-                throw new AssertionError("Unhandled class " + value.getClass()
-                        + " for key " + key);
-            }
-        }
+        checkValue(value);
         return super.put(key, value);
     }
 
@@ -346,5 +387,11 @@ public class ClassData extends LinkedHashMap<String, Object> {
         cdw.start();
         cdw.write(this);
         cdw.finish();
+    }
+
+
+    @Override
+    public Iterator<java.util.Map.Entry<String, Object>> iterator() {
+        return entrySet().iterator();
     }
 }

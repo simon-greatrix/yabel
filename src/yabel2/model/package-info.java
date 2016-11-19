@@ -2,4 +2,4 @@
  * @author Simon Greatrix
  *
  */
-package yabel2.decomp;
+package yabel2.model;
